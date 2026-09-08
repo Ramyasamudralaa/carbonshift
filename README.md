@@ -298,19 +298,30 @@ python -m pytest tests/ -q
 58 tests cover the logic that can be verified without AWS. Mapping to the
 specification's checklist:
 
-| # | Check | Covered by |
-|---|---|---|
-| 1 | Fetches and parses a real live forecast | Manual — run the CLI with a real key |
-| 2 | Handles API failure/timeout without crashing | `tests/test_carbon_api.py` |
-| 3 | Excludes forecast timestamps after the deadline | `tests/test_scheduler.py` |
-| 4 | Identifies the true minimum-carbon slot | `tests/test_scheduler.py` |
-| 5 | Worker image builds and runs standalone | Manual — `docker run` (step 3 above) |
-| 6 | EventBridge rule actually fires the Fargate task | Manual — schedule ~10 min out |
-| 7 | Completion log visible in CloudWatch | Manual — `aws logs tail` |
-| 8 | Chart renders correctly from a real run | `tests/test_chart.py` + visual check |
+| # | Check | Covered by | Status |
+|---|---|---|---|
+| 1 | Fetches and parses a real live forecast | Manual — run the CLI with a real key | ⏳ pending |
+| 2 | Handles API failure/timeout without crashing | `tests/test_carbon_api.py` | ✅ |
+| 3 | Excludes forecast timestamps after the deadline | `tests/test_scheduler.py` | ✅ |
+| 4 | Identifies the true minimum-carbon slot | `tests/test_scheduler.py` | ✅ |
+| 5 | Worker image builds and runs standalone | Manual — `docker run` (step 3 above) | ✅ |
+| 6 | EventBridge rule actually fires the Fargate task | Manual — schedule ~10 min out | ⏳ pending |
+| 7 | Completion log visible in CloudWatch | Manual — `aws logs tail` | ⏳ pending |
+| 8 | Chart renders correctly from a real run | `tests/test_chart.py` + visual check | ✅ |
 
-Checks 1, 5, 6 and 7 require live AWS and a live API key, so they are run by
-hand. Everything else is automated.
+Checks 1, 6 and 7 require live AWS and a live API key, so they are run by hand.
+Everything else is automated.
+
+Check 5 was verified on Docker 29.7.2 — the image builds from `src/worker` and
+runs under plain `docker run` with no AWS involved:
+
+```
+[2026-09-08T18:38:19] CarbonShift worker starting
+[2026-09-08T18:38:19]   payload        : local-test
+[2026-09-08T18:38:24]   rows processed : 5
+[2026-09-08T18:38:24]   checksum       : 8cca50fc7eb250ec
+[2026-09-08T18:38:24] CARBONSHIFT_JOB_COMPLETE {"checksum": "8cca50fc7eb250ec", ...}
+```
 
 ---
 
