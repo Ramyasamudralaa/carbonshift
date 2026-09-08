@@ -300,7 +300,7 @@ specification's checklist:
 
 | # | Check | Covered by | Status |
 |---|---|---|---|
-| 1 | Fetches and parses a real live forecast | Manual — run the CLI with a real key | ⏳ pending |
+| 1 | Fetches and parses a real live forecast | Manual — run the CLI with a real key | ✅ |
 | 2 | Handles API failure/timeout without crashing | `tests/test_carbon_api.py` | ✅ |
 | 3 | Excludes forecast timestamps after the deadline | `tests/test_scheduler.py` | ✅ |
 | 4 | Identifies the true minimum-carbon slot | `tests/test_scheduler.py` | ✅ |
@@ -309,8 +309,18 @@ specification's checklist:
 | 7 | Completion log visible in CloudWatch | Manual — `aws logs tail` | ⏳ pending |
 | 8 | Chart renders correctly from a real run | `tests/test_chart.py` + visual check | ✅ |
 
-Checks 1, 6 and 7 require live AWS and a live API key, so they are run by hand.
-Everything else is automated.
+Checks 6 and 7 require a live AWS deployment, so they are run by hand.
+Everything else is automated or has been verified directly.
+
+Check 1 was verified against the live Electricity Maps API — a real 24-hour
+forecast for `DE`, fetched and parsed end to end:
+
+```
+forecast          : 24 hourly points, 2026-09-08T18:00:00+00:00 -> 2026-09-09T17:00:00+00:00, low 158 / high 417 gCO2/kWh
+run immediately   : 2026-09-08T18:00:00+00:00 at 416 gCO2/kWh -> 3.08 g CO2
+CarbonShift picks : 2026-09-09T00:00:00+00:00 at 313 gCO2/kWh -> 2.32 g CO2
+CO2 saved         : 0.76 g (24.8%)
+```
 
 Check 5 was verified on Docker 29.7.2 — the image builds from `src/worker` and
 runs under plain `docker run` with no AWS involved:
