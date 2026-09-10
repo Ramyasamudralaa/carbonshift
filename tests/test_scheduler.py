@@ -252,9 +252,16 @@ def test_create_schedule_builds_a_valid_one_time_ecs_target():
     assert target_input["LaunchType"] == "FARGATE"
     assert target_input["TaskDefinition"] == AWS_CONFIG["task_definition_arn"]
     assert target_input["Cluster"] == AWS_CONFIG["cluster_arn"]
+    # PascalCase is required by the universal target; the lowercase spelling the
+    # ECS API uses is rejected with "field is not supported by api 'runTask'".
+    assert "awsvpcConfiguration" not in target_input["NetworkConfiguration"]
     assert (
-        target_input["NetworkConfiguration"]["awsvpcConfiguration"]["Subnets"]
+        target_input["NetworkConfiguration"]["AwsvpcConfiguration"]["Subnets"]
         == AWS_CONFIG["subnets"]
+    )
+    assert (
+        target_input["NetworkConfiguration"]["AwsvpcConfiguration"]["SecurityGroups"]
+        == AWS_CONFIG["security_groups"]
     )
     assert arn.endswith("carbonshift-worker-run-abc")
 
@@ -420,3 +427,46 @@ def test_run_record_round_trips_for_the_chart(sample_forecast, base_time, tmp_pa
     assert record["baseline"]["carbon_intensity"] == 480.0
     assert len(record["forecast"]) == len(sample_forecast)
     assert (tmp_path / "latest.json").exists()
+
+
+# --- Regression: .env must load before the config constants ----------------
+
+
+def test_env_file_is_loaded_before_the_config_constants():
+    """scheduler.py captures its AWS config into module constants at import.
+
+    If load_dotenv() runs after that -- as it did when it lived inside main()
+    -- every constant captures an empty string, and a correctly populated .env
+    still fails with 'Missing AWS configuration'. The ordering in the source is
+    the thing that makes it work, so assert on the ordering directly.
+    """
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "scheduler.py"
+    ).read_text(encoding="utf-8")
+
+    load_at = source.index("load_dotenv()")
+    first_constant_at = source.index("ECS_CLUSTER_ARN = os.getenv")
+
+    assert load_at < first_constant_at, (
+        "load_dotenv() must run before the configuration constants are "
+        "evaluated, or values from .env are captured as empty strings."
+    )
+
+
+def test_config_constants_are_read_from_the_environment(monkeypatch):
+    """A fresh import picks up whatever the environment holds at that moment."""
+    import importlib
+    import sys
+
+    monkeypatch.setenv(
+        "ECS_CLUSTER_ARN", "arn:aws:ecs:eu-central-1:111122223333:cluster/from-env"
+    )
+    sys.modules.pop("src.scheduler", None)
+    try:
+        module = importlib.import_module("src.scheduler")
+        assert module.ECS_CLUSTER_ARN.endswith("cluster/from-env")
+    finally:
+        sys.modules.pop("src.scheduler", None)
+        importlib.import_module("src.scheduler")

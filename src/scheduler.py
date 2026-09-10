@@ -29,6 +29,15 @@ try:  # pragma: no cover - import shim so the module works either way
 except ImportError:  # running as a plain script from inside src/
     from carbon_api import ForecastEntry, get_carbon_forecast, summarise  # type: ignore
 
+# .env must be loaded BEFORE the configuration constants below are evaluated,
+# or they capture empty strings and every AWS value looks unset at runtime.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:  # pragma: no cover - dotenv is optional
+    pass
+
 
 # --- Configuration ---------------------------------------------------------
 
@@ -332,14 +341,18 @@ def create_ecs_schedule(
 
         client = boto3.client("scheduler", region_name=AWS_REGION)
 
+    # The universal target (aws-sdk:ecs:runTask) takes the AWS SDK JSON shape,
+    # which is PascalCase throughout -- including AwsvpcConfiguration. The
+    # lowercase 'awsvpcConfiguration' that the ECS API itself uses is rejected
+    # here with "field is not supported by api 'runTask'".
     network_configuration = {
-        "awsvpcConfiguration": {
+        "AwsvpcConfiguration": {
             "Subnets": config["subnets"],
             "AssignPublicIp": config["assign_public_ip"],
         }
     }
     if config["security_groups"]:
-        network_configuration["awsvpcConfiguration"]["SecurityGroups"] = config[
+        network_configuration["AwsvpcConfiguration"]["SecurityGroups"] = config[
             "security_groups"
         ]
 
@@ -548,13 +561,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Decide and report without creating the AWS schedule.",
     )
     args = parser.parse_args(argv)
-
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass
 
     now = datetime.now(timezone.utc)
     deadline = _parse_deadline(args, now)
