@@ -292,7 +292,7 @@ and executed by ECS Fargate with no human involvement in between.
 |---|---|
 | Submitted | 16:33 UTC, deadline 17:33 UTC |
 | Chosen slot | **17:00:00 UTC** (the lowest-carbon hour inside the deadline) |
-| Schedule created | `arn:aws:scheduler:eu-central-1:058264498176:schedule/default/carbonshift-worker-run-4e266db7ad` |
+| Schedule created | `arn:aws:scheduler:eu-central-1:<account-id>:schedule/default/carbonshift-worker-run-4e266db7ad` |
 | Task actually started | **17:00:21 UTC** — 21 s after the target, Fargate cold start |
 | Exit code | `0` |
 | Checksum | `8cca50fc7eb250ec` — identical to the local `docker run`, proving determinism |
