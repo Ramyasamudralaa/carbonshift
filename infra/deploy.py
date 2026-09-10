@@ -122,6 +122,35 @@ def ensure_ecr_repository(ecr: Any) -> str:
     return uri
 
 
+def ensure_ecs_service_linked_role(iam: Any) -> None:
+    """Create the ECS service-linked role if this account has never used ECS.
+
+    Without it, create_cluster fails with 'Unable to assume the service linked
+    role'. AWS creates it automatically when you make a cluster in the console,
+    so accounts that have touched ECS before already have it -- but a fresh
+    account driven purely by the API does not.
+    """
+    step("ECS service-linked role")
+    try:
+        iam.create_service_linked_role(AWSServiceName="ecs.amazonaws.com")
+        detail("created")
+    except ClientError as exc:
+        code = _error_code(exc)
+        message = exc.response.get("Error", {}).get("Message", "")
+        # IAM reports an existing service-linked role as InvalidInput.
+        if code == "InvalidInput" and "has been taken" in message:
+            detail("already exists, reusing")
+            return
+        if code in ("AccessDenied", "AccessDeniedException"):
+            raise DeployError(
+                "Cannot create the ECS service-linked role: your AWS identity "
+                "lacks iam:CreateServiceLinkedRole. Either add that permission, "
+                "or create any ECS cluster once in the console (which makes the "
+                "role automatically) and re-run this script."
+            )
+        raise _explain(exc, "Creating the ECS service-linked role")
+
+
 def ensure_cluster(ecs: Any) -> str:
     step(f"ECS cluster '{CLUSTER_NAME}'")
     try:
@@ -397,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         repository_uri = ensure_ecr_repository(ecr)
         image_uri = args.image_uri or f"{repository_uri}:latest"
 
+        ensure_ecs_service_linked_role(iam)
         cluster_arn = ensure_cluster(ecs)
         ensure_log_group(logs)
 
