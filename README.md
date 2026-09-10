@@ -54,6 +54,83 @@ developers and small teams. CarbonShift fills that gap.
 
 ---
 
+## Who this is for
+
+You'll get value from CarbonShift if you run **batch work that isn't
+latency-sensitive** — nightly ETL, report generation, data pipelines, model
+training, backups, one-off processing — on AWS. Anything where "it must be done
+by 7am" is true but "it must start this second" is not.
+
+It is **not** for user-facing or latency-sensitive workloads. Delaying those is
+the wrong trade, and CarbonShift makes no attempt to be useful there.
+
+How much you save depends entirely on how variable your grid is. Measured
+across five zones on real forecast data:
+
+| Grid | Daily swing | Realistic saving |
+|---|---|---|
+| Germany (`DE`) | 2.6× | ~50% |
+| Great Britain (`GB`) | 2.5× | ~45% |
+| South India (`IN-SO`) | 1.5× | ~30% |
+| West India (`IN-WE`) | 1.4× | ~25% |
+| US Mid-Atlantic (`US-MIDA-PJM`) | 1.2× | ~12% |
+
+A flat grid means a small saving. That is the honest answer, and CarbonShift
+will tell you so rather than pretend otherwise — if no hour before your
+deadline beats running immediately, it refuses to shift the job at all.
+
+## Try it in 60 seconds — no AWS account needed
+
+You do **not** need AWS to see what CarbonShift decides. `--dry-run` fetches a
+real forecast, makes the real decision, and reports the real saving, without
+provisioning or scheduling anything.
+
+All you need is Python 3.10+ and a free
+[Electricity Maps](https://portal.electricitymaps.com/) API token.
+
+```bash
+git clone https://github.com/Ramyasamudralaa/carbonshift.git && cd carbonshift
+```
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+cp .env.example .env    # then put your token in ELECTRICITY_MAPS_API_KEY
+```
+
+```bash
+python -m src.scheduler --payload "my-nightly-job" --deadline-hours 12 --dry-run
+```
+
+```
+forecast          : 24 hourly points, low 251 / high 512 gCO2/kWh
+run immediately   : 2026-09-10T17:00:00+00:00 at 497 gCO2/kWh -> 3.68 g CO2
+CarbonShift picks : 2026-09-11T09:00:00+00:00 at 251 gCO2/kWh -> 1.86 g CO2
+delay             : 16.0 h
+CO2 saved         : 1.82 g (49.5%)
+```
+
+Then render the chart:
+
+```bash
+python demo/chart.py
+```
+
+That is the whole idea, evaluated before you commit to any cloud setup. When
+you want it to *actually run* your job, continue to [Setup](#setup) below.
+
+### What you need, by how far you want to go
+
+| To… | You need |
+|---|---|
+| See the decision and the chart | Python 3.10+, an Electricity Maps token |
+| Run the worker locally | + Docker |
+| Actually schedule and execute jobs | + an AWS account (EventBridge Scheduler, ECS Fargate, ECR, IAM, CloudWatch Logs) |
+
+---
+
 ## Architecture
 
 ```
