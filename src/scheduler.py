@@ -99,6 +99,15 @@ class NoSlotBeforeDeadlineError(SchedulerError):
     """No forecast hour falls inside the window ending at the deadline."""
 
 
+class ShiftNotWorthwhileError(SchedulerError):
+    """Every eligible hour is at least as dirty as running immediately.
+
+    Not a malfunction -- it is CarbonShift correctly concluding that the
+    cleanest available moment is now, so delaying the job would raise its
+    emissions rather than lower them.
+    """
+
+
 class SchedulerConfigError(SchedulerError):
     """Required AWS configuration is missing."""
 
@@ -450,6 +459,7 @@ def schedule_job(
     now: datetime | None = None,
     forecast: Sequence[ForecastEntry] | None = None,
     scheduler_client: Any = None,
+    require_improvement: bool = True,
 ) -> Decision:
     """Fetch the forecast, choose the cleanest legal hour, and register the run.
 
@@ -462,6 +472,13 @@ def schedule_job(
         now: Injectable clock, for tests.
         forecast: Injectable forecast, for tests.
         scheduler_client: Injectable boto3 scheduler client, for tests.
+        require_improvement: Refuse to shift when the best eligible hour is no
+            cleaner than running immediately. Leave this on unless you have a
+            reason to delay regardless of the carbon outcome.
+
+    Raises:
+        NoSlotBeforeDeadlineError: nothing is bookable before the deadline.
+        ShiftNotWorthwhileError: delaying would not reduce emissions.
     """
     now = now or datetime.now(timezone.utc)
     if deadline.tzinfo is None:
@@ -482,6 +499,20 @@ def schedule_job(
     earliest = now + timedelta(seconds=MIN_SCHEDULE_LEAD_SECONDS)
     chosen = pick_best_slot(entries, deadline=deadline, earliest=earliest)
     baseline = baseline_slot(entries)
+
+    # The baseline hour is excluded from the eligible set once it is in the
+    # past, so the minimum of what remains can still be dirtier than running
+    # right now. Shifting in that case would raise emissions, which defeats the
+    # point, so refuse rather than schedule a worse outcome.
+    if require_improvement and chosen.carbon_intensity >= baseline.carbon_intensity:
+        raise ShiftNotWorthwhileError(
+            "Running immediately is already the cleanest option. The best slot "
+            f"before {deadline.isoformat()} is {chosen.timestamp.isoformat()} at "
+            f"{chosen.carbon_intensity:.0f} gCO2/kWh, which is not cleaner than "
+            f"running now at {baseline.carbon_intensity:.0f} gCO2/kWh. Nothing "
+            "was scheduled -- run the job now, or allow a later deadline so "
+            "CarbonShift has a cleaner hour to reach."
+        )
 
     job_id = f"{SCHEDULE_NAME_PREFIX}-{uuid.uuid4().hex[:10]}"
     decision = Decision(
@@ -574,6 +605,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             dry_run=args.dry_run,
             now=now,
         )
+    except ShiftNotWorthwhileError as exc:
+        # A correct answer, not a failure: the cleanest moment is right now.
+        print(f"NO SHIFT SCHEDULED: {exc}")
+        return 0
     except SchedulerError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

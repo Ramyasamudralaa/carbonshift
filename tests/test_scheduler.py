@@ -18,6 +18,7 @@ from src.scheduler import (
     Decision,
     NoSlotBeforeDeadlineError,
     SchedulerConfigError,
+    ShiftNotWorthwhileError,
     SchedulerError,
     _schedule_expression,
     baseline_slot,
@@ -470,3 +471,114 @@ def test_config_constants_are_read_from_the_environment(monkeypatch):
     finally:
         sys.modules.pop("src.scheduler", None)
         importlib.import_module("src.scheduler")
+
+
+# --- Guard: never shift a job into a dirtier hour --------------------------
+
+
+def _rising_forecast(base_time):
+    """Cleanest hour is now; every later hour is worse. The 1h-deadline case."""
+    return [
+        ForecastEntry(base_time + timedelta(hours=0), 462.0),
+        ForecastEntry(base_time + timedelta(hours=1), 497.0),
+        ForecastEntry(base_time + timedelta(hours=2), 513.0),
+    ]
+
+
+def test_refuses_to_shift_into_a_dirtier_hour(base_time):
+    with pytest.raises(ShiftNotWorthwhileError) as excinfo:
+        schedule_job(
+            payload="demo",
+            deadline=base_time + timedelta(hours=2),
+            zone="DE",
+            dry_run=True,
+            now=base_time,
+            forecast=_rising_forecast(base_time),
+        )
+
+    message = str(excinfo.value)
+    assert "497" in message and "462" in message  # names both sides
+    assert "Nothing" in message and "was scheduled" in message
+
+
+def test_refuses_when_the_best_slot_merely_ties_the_baseline(base_time):
+    """A shift with no carbon benefit is still a delay for nothing."""
+    forecast = [
+        ForecastEntry(base_time + timedelta(hours=0), 400.0),
+        ForecastEntry(base_time + timedelta(hours=1), 400.0),
+    ]
+
+    with pytest.raises(ShiftNotWorthwhileError):
+        schedule_job(
+            payload="demo",
+            deadline=base_time + timedelta(hours=1),
+            zone="DE",
+            dry_run=True,
+            now=base_time,
+            forecast=forecast,
+        )
+
+
+def test_no_aws_call_is_made_when_the_shift_is_refused(base_time, monkeypatch):
+    monkeypatch.setattr("src.scheduler._require_aws_config", lambda: AWS_CONFIG)
+    client = FakeSchedulerClient()
+
+    with pytest.raises(ShiftNotWorthwhileError):
+        schedule_job(
+            payload="demo",
+            deadline=base_time + timedelta(hours=2),
+            zone="DE",
+            now=base_time,
+            forecast=_rising_forecast(base_time),
+            scheduler_client=client,
+        )
+
+    assert client.requests == []
+
+
+def test_a_genuinely_cleaner_hour_still_schedules(sample_forecast, base_time):
+    decision = schedule_job(
+        payload="demo",
+        deadline=base_time + timedelta(hours=11),
+        zone="DE",
+        dry_run=True,
+        now=base_time,
+        forecast=sample_forecast,
+    )
+
+    assert decision.chosen.carbon_intensity < decision.baseline.carbon_intensity
+    assert decision.co2_saved_g > 0
+
+
+def test_the_guard_can_be_turned_off_deliberately(base_time):
+    decision = schedule_job(
+        payload="demo",
+        deadline=base_time + timedelta(hours=2),
+        zone="DE",
+        dry_run=True,
+        now=base_time,
+        forecast=_rising_forecast(base_time),
+        require_improvement=False,
+    )
+
+    assert decision.co2_saved_g < 0  # the old behaviour, now opt-in
+
+
+def test_the_cli_treats_a_refused_shift_as_success_not_an_error(base_time, capsys, monkeypatch):
+    """Exit 0: 'run it now' is a correct answer, not a malfunction."""
+    import src.scheduler as scheduler_module
+
+    monkeypatch.setattr(
+        scheduler_module,
+        "get_carbon_forecast",
+        lambda zone, hours=24: _rising_forecast(
+            datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        ),
+    )
+
+    exit_code = scheduler_module.main(
+        ["--payload", "demo", "--deadline-hours", "2", "--dry-run"]
+    )
+
+    assert exit_code == 0
+    assert "NO SHIFT SCHEDULED" in capsys.readouterr().out
