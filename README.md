@@ -244,6 +244,12 @@ The one-time schedule deletes itself after firing, so test runs don't accumulate
 aws logs tail /ecs/carbonshift-worker --since 1h --filter-pattern CARBONSHIFT_JOB_COMPLETE
 ```
 
+> **On Windows, run that in PowerShell, not Git Bash.** Git Bash rewrites the
+> leading `/` of `/ecs/carbonshift-worker` into a Windows path before the AWS
+> CLI ever sees it, so the query silently returns nothing and it looks like the
+> job never ran. If you must use Git Bash, prefix the command with
+> `MSYS_NO_PATHCONV=1`.
+
 ### Draw the result
 
 ```bash
@@ -277,15 +283,56 @@ hardware.
 
 ## Measured result
 
-> ⚠️ **Not yet filled in.** This section must contain the real numbers from an
-> actual end-to-end run — submission → scheduled wait → verified execution in
-> CloudWatch — before the project is demo-ready. Do not substitute a
-> hypothetical figure. Replace this block with:
->
-> - the run record (`runs/<job-id>.json`)
-> - the CloudWatch `CARBONSHIFT_JOB_COMPLETE` log excerpt
-> - `demo/result.png`
-> - the headline number: *X g CO₂ saved (Y%)* by delaying execution Z hours
+### The mechanism, verified end to end
+
+On 2026-09-10, a job was submitted to CarbonShift, scheduled by EventBridge,
+and executed by ECS Fargate with no human involvement in between.
+
+| | |
+|---|---|
+| Submitted | 16:33 UTC, deadline 17:33 UTC |
+| Chosen slot | **17:00:00 UTC** (the lowest-carbon hour inside the deadline) |
+| Schedule created | `arn:aws:scheduler:eu-central-1:058264498176:schedule/default/carbonshift-worker-run-4e266db7ad` |
+| Task actually started | **17:00:21 UTC** — 21 s after the target, Fargate cold start |
+| Exit code | `0` |
+| Checksum | `8cca50fc7eb250ec` — identical to the local `docker run`, proving determinism |
+
+The CloudWatch log for that run:
+
+```
+[2026-09-10T17:00:21.620544+00:00] CarbonShift worker starting
+[2026-09-10T17:00:21.620573+00:00]   payload        : carbonshift-e2e-test
+[2026-09-10T17:00:21.620580+00:00]   scheduled for  : 2026-09-10T17:00:00+00:00
+[2026-09-10T17:00:21.620587+00:00]   actual start   : 2026-09-10T17:00:21.620536+00:00
+[2026-09-10T17:00:26.621309+00:00]   rows processed : 5
+[2026-09-10T17:00:26.621355+00:00]   checksum       : 8cca50fc7eb250ec
+[2026-09-10T17:00:26.621395+00:00] CARBONSHIFT_JOB_COMPLETE {"checksum": "8cca50fc7eb250ec", "duration_seconds": 5.0, "payload": "carbonshift-e2e-test", "rows_processed": 5, "scheduled_for": "2026-09-10T17:00:00+00:00", ...}
+```
+
+The one-time schedule deleted itself after firing, as designed.
+
+That run was a mechanism test on a one-hour deadline, during an evening grid
+ramp where no cleaner hour was reachable — so its carbon delta was negative.
+It is reported here because it proves the plumbing, not the saving. (It is also
+what prompted the guard described below.)
+
+### The carbon saving
+
+> ⏳ **Pending.** A demo job is scheduled for **2026-09-11 09:00 UTC**, the
+> German solar peak at **251 gCO₂/kWh**, against a submit-time baseline of
+> **497 gCO₂/kWh** — a projected **1.82 g CO₂ saved, 49.5%**, for a 16-hour
+> delay. This block gets replaced with the completed run's verified log and
+> `demo/result.png` once it fires. No hypothetical figure is substituted for it.
+
+The full forecast curve behind that decision:
+
+```
+17:00  497  +0.0%   (run now — the baseline)
+20:00  512  -3.0%   evening peak, the worst hour
+05:00  393 +20.9%
+09:00  251 +49.5%   <- chosen: solar peak, the cleanest hour
+16:00  435 +12.5%
+```
 
 ---
 
@@ -305,12 +352,13 @@ specification's checklist:
 | 3 | Excludes forecast timestamps after the deadline | `tests/test_scheduler.py` | ✅ |
 | 4 | Identifies the true minimum-carbon slot | `tests/test_scheduler.py` | ✅ |
 | 5 | Worker image builds and runs standalone | Manual — `docker run` (step 3 above) | ✅ |
-| 6 | EventBridge rule actually fires the Fargate task | Manual — schedule ~10 min out | ⏳ pending |
-| 7 | Completion log visible in CloudWatch | Manual — `aws logs tail` | ⏳ pending |
+| 6 | EventBridge rule actually fires the Fargate task | Manual — schedule ~10 min out | ✅ |
+| 7 | Completion log visible in CloudWatch | Manual — `aws logs tail` | ✅ |
 | 8 | Chart renders correctly from a real run | `tests/test_chart.py` + visual check | ✅ |
 
-Checks 6 and 7 require a live AWS deployment, so they are run by hand.
-Everything else is automated or has been verified directly.
+**All eight checks pass.** Checks 1, 5, 6 and 7 need a live API key or a live
+AWS deployment, so they were run by hand and their evidence is in
+[Measured result](#measured-result); the rest are automated.
 
 Check 1 was verified against the live Electricity Maps API — a real 24-hour
 forecast for `DE`, fetched and parsed end to end:
