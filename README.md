@@ -405,6 +405,56 @@ python -m src.history
 Dry runs are always excluded from the totals — they never executed, so counting
 them would inflate the number.
 
+### Carbon reports — the evidence, not just the number
+
+```bash
+python -m src.report --month 2026-09 --verify --csv
+```
+
+A running total on a terminal is not evidence. An organisation reporting under
+a carbon disclosure regime needs a **document**: the period, the jobs, the
+figures, the method that produced them, and an honest statement of what the
+figures are and are not.
+
+```
+  Carbon Reduction Report  All recorded activity
+  ----------------------------------------------------------
+    Workloads shifted                   3
+    Electricity consumed           0.0222 kWh
+    Baseline emissions              8.961 g
+    Actual emissions                7.282 g
+    Emissions avoided               1.680 g (18.7%)
+    Verified against logs               3 of 4
+    Excluded, unverifiable              1 (+0.770 g not claimed)
+```
+
+It writes a printable HTML report — **Ctrl+P to save as PDF** — containing:
+
+| Section | Contents |
+|---|---|
+| Headline | kg CO₂e avoided, jobs shifted, mean deferral |
+| Summary | Energy consumed, baseline vs actual emissions, zones and regions |
+| Itemised activity | Every job, with its verification status |
+| Methodology | Scope, data source, baseline definition, energy model, formulae |
+| Limitations | What the figures are not, stated plainly |
+
+`--csv` also writes a row-per-job CSV for an auditor or a spreadsheet.
+
+**Three rules it will not break:**
+
+- **Previews are never counted.** They were never scheduled, so counting them
+  would overstate the saving.
+- **With `--verify`, jobs with no CloudWatch log are excluded from every
+  figure** and the report says how much was therefore not claimed.
+- **Without `--verify`, the report says so on its face** and tells you to
+  re-run before disclosing anything.
+
+Set `CARBONSHIFT_ORGANISATION` in `.env` to put your organisation's name on it.
+
+> The report states that figures are modelled estimates from forecast carbon
+> intensity, not metered emissions, and that it is not an assurance statement.
+> A compliance document that overstates its own certainty is worse than none.
+
 ### The live dashboard
 
 ```bash

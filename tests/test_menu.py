@@ -133,7 +133,7 @@ def test_scheduling_without_a_key_refuses_and_points_at_setup(menu, capsys):
 
 def test_every_menu_entry_is_handled(menu):
     """A listed option with no branch would silently do nothing."""
-    assert len(menu.ACTIONS) == 7
+    assert len(menu.ACTIONS) == 8
     assert menu.ACTIONS[-1][0] == "Quit"
 
 

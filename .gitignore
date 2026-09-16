@@ -13,3 +13,4 @@ venv/
 runs/
 *.png
 demo/dashboard.html
+reports/

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -94,7 +95,7 @@ def status_line():
         return (f"  {YELLOW}Not set up yet.{RESET} Start with option 1.", False, False)
     if not has_aws:
         return (f"  {GREEN}Ready to preview decisions.{RESET} "
-                f"{DIM}AWS not configured, so jobs cannot run yet (option 5).{RESET}",
+                f"{DIM}AWS not configured, so jobs cannot run yet (option 7).{RESET}",
                 True, False)
     return (f"  {GREEN}Fully set up.{RESET} "
             f"{DIM}Jobs can be scheduled and will really run.{RESET}", True, True)
@@ -211,6 +212,45 @@ def action_history():
     history.main(argv)
 
 
+def action_report():
+    print()
+    print(f"{BOLD}  Carbon report{RESET}")
+    rule()
+    print("  A document with the figures and the method behind them, for")
+    print("  filing or handing to whoever asks for your emissions numbers.")
+    print()
+    print(f"  {DIM}Previews are never counted. Jobs that cannot be confirmed{RESET}")
+    print(f"  {DIM}against AWS logs are listed but excluded from the totals.{RESET}")
+    print()
+
+    period = ask("Period - 'month', a month like 2026-09, a year, or 'all'", "month")
+    if period is None:
+        return
+
+    argv = []
+    if period.lower() == "all":
+        argv.append("--all")
+    elif re.fullmatch(r"\d{4}-\d{2}", period):
+        argv += ["--month", period]
+    elif re.fullmatch(r"\d{4}", period):
+        argv += ["--year", period]
+
+    check = ask("Confirm each job against AWS logs? (slower, but needed to file) (y/n)", "y")
+    if check is None:
+        return
+    if check.lower().startswith("y"):
+        argv.append("--verify")
+
+    want_csv = ask("Also write a CSV of every job? (y/n)", "y")
+    if want_csv and want_csv.lower().startswith("y"):
+        argv.append("--csv")
+
+    print()
+    from src import report
+
+    report.main(argv)
+
+
 def action_doctor():
     print()
     from src import doctor
@@ -255,6 +295,7 @@ ACTIONS = [
     ("Schedule a job", "pick a job and a deadline"),
     ("Open the live dashboard", "charts and a countdown, in your browser"),
     ("See my history and savings", "every run, and the running total"),
+    ("Generate a carbon report", "monthly report you can file or print"),
     ("Check my setup is healthy", "finds problems and how to fix them"),
     ("Deploy to AWS", "one-time, creates the cloud resources"),
     ("Quit", ""),
@@ -296,16 +337,18 @@ def main() -> int:
         elif choice == "4":
             action_history()
         elif choice == "5":
-            action_doctor()
+            action_report()
         elif choice == "6":
+            action_doctor()
+        elif choice == "7":
             action_deploy()
-        elif choice in ("7", "q", "quit", "exit"):
+        elif choice in ("8", "q", "quit", "exit"):
             print()
             print("  Bye.")
             return 0
         else:
             print()
-            print(f"  {RED}Pick a number from 1 to 7.{RESET}")
+            print(f"  {RED}Pick a number from 1 to 8.{RESET}")
 
         pause()
 
