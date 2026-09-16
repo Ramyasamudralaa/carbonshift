@@ -405,6 +405,34 @@ python -m src.history
 Dry runs are always excluded from the totals — they never executed, so counting
 them would inflate the number.
 
+### The live dashboard
+
+```bash
+python demo/dashboard.py
+```
+
+Builds one **self-contained HTML file** and opens it. No server, no internet, no
+libraries — so it keeps working on conference wifi, which is to say on no wifi
+at all.
+
+| Panel | Shows |
+|---|---|
+| **Latest decision** | The percentage saved, the grid zone, the delay |
+| **Countdown** | Live ticking countdown to a job that hasn't fired yet, or `DONE` |
+| **Total saved** | Running total across every real run |
+| **Carbon curve** | The forecast window, with the deadline, the "run now" point and the hour CarbonShift chose both marked |
+| **Recent runs** | The last nine, previews greyed out |
+
+```bash
+python demo/dashboard.py --watch
+```
+
+Rebuilds every 30 seconds, for leaving on a screen. `--no-open` builds without
+launching a browser.
+
+The page is generated from the run records, so it can never disagree with what
+the system actually did.
+
 ### When something isn't working
 
 ```bash

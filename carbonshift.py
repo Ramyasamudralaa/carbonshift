@@ -172,6 +172,34 @@ def action_schedule(has_key, has_aws):
             chart.main([])
 
 
+def action_dashboard():
+    print()
+    print(f"{BOLD}  Live dashboard{RESET}")
+    rule()
+    print("  Builds one self-contained HTML page and opens it: the carbon")
+    print("  curve, a countdown to the next scheduled job, and the running")
+    print("  total saved.")
+    print()
+    print(f"  {DIM}No internet needed once it is open - useful at a stall.{RESET}")
+    print()
+
+    watch = ask("Keep it refreshing as new jobs run? (y/n)", "n")
+    if watch is None:
+        return
+
+    dashboard = load_module(REPO / "demo" / "dashboard.py", "carbonshift_dashboard")
+    print()
+    if watch.lower().startswith("y"):
+        print(f"  {DIM}Ctrl+C stops the refreshing and returns here.{RESET}")
+        print()
+        try:
+            dashboard.main(["--watch"])
+        except KeyboardInterrupt:
+            print("\n  Stopped refreshing.")
+    else:
+        dashboard.main([])
+
+
 def action_history():
     print()
     from src import history
@@ -225,6 +253,7 @@ def action_deploy():
 ACTIONS = [
     ("Set up CarbonShift", "api key, region - writes your .env"),
     ("Schedule a job", "pick a job and a deadline"),
+    ("Open the live dashboard", "charts and a countdown, in your browser"),
     ("See my history and savings", "every run, and the running total"),
     ("Check my setup is healthy", "finds problems and how to fix them"),
     ("Deploy to AWS", "one-time, creates the cloud resources"),
@@ -263,18 +292,20 @@ def main() -> int:
             _, has_key, has_aws = status_line()
             action_schedule(has_key, has_aws)
         elif choice == "3":
-            action_history()
+            action_dashboard()
         elif choice == "4":
-            action_doctor()
+            action_history()
         elif choice == "5":
+            action_doctor()
+        elif choice == "6":
             action_deploy()
-        elif choice in ("6", "q", "quit", "exit"):
+        elif choice in ("7", "q", "quit", "exit"):
             print()
             print("  Bye.")
             return 0
         else:
             print()
-            print(f"  {RED}Pick a number from 1 to 6.{RESET}")
+            print(f"  {RED}Pick a number from 1 to 7.{RESET}")
 
         pause()
 

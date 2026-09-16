@@ -12,3 +12,4 @@ venv/
 # CarbonShift run artifacts
 runs/
 *.png
+demo/dashboard.html
