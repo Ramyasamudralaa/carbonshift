@@ -97,8 +97,12 @@ pip install -r requirements.txt
 ```
 
 ```bash
-cp .env.example .env    # then put your token in ELECTRICITY_MAPS_API_KEY
+python setup.py
 ```
+
+`setup.py` is a guided wizard. It asks which region you want, asks for your API
+token, **tests the token against the live API before accepting it**, and writes
+your `.env` for you. You don't have to know what any of the variables mean.
 
 ```bash
 python -m src.scheduler --payload "my-nightly-job" --deadline-hours 12 --dry-run
@@ -338,6 +342,37 @@ point, the point CarbonShift chose, the deadline, and the CO₂ saved. Pass
 `--actual-run` with the real execution timestamp from CloudWatch so the chart
 shows the verified run, not just the intended one.
 
+### See everything you've saved so far
+
+A one-time AWS schedule **deletes itself the moment it fires**, so afterwards
+there is nothing left in the console to look at. Every decision is recorded to
+`runs/` when it is made, and this reads them back:
+
+```bash
+python -m src.history
+```
+
+```
+  WHEN IT RAN       JOB                    TYPE        BEFORE   AFTER     SAVED  STATUS
+  2026-09-10 17:00  carbonshift-e2e-test   scheduled      462     497    -0.26 g  confirmed ran
+  2026-09-11 09:00  carbonshift-demo-run   scheduled      497     251    +1.82 g  confirmed ran
+  2026-09-16 11:00  ramya-proof-test       scheduled      252     236    +0.12 g  confirmed ran
+
+  Totals across 4 real scheduled runs
+    CO2 that would have been emitted :   12.64 g
+    CO2 actually emitted             :   10.19 g
+    CO2 saved                        :    2.45 g (19.4%)
+```
+
+| Flag | What it does |
+|---|---|
+| `--verify` | Cross-checks each run against CloudWatch Logs and marks it *confirmed ran* or *no log found* |
+| `--real-only` | Hides dry runs |
+| `--chart` | Writes `demo/history.png`, cumulative savings over time |
+
+Dry runs are always excluded from the totals — they never executed, so counting
+them would inflate the number.
+
 ---
 
 ## How the carbon maths works
@@ -395,11 +430,31 @@ what prompted the guard described below.)
 
 ### The carbon saving
 
-> ⏳ **Pending.** A demo job is scheduled for **2026-09-11 09:00 UTC**, the
-> German solar peak at **251 gCO₂/kWh**, against a submit-time baseline of
-> **497 gCO₂/kWh** — a projected **1.82 g CO₂ saved, 49.5%**, for a 16-hour
-> delay. This block gets replaced with the completed run's verified log and
-> `demo/result.png` once it fires. No hypothetical figure is substituted for it.
+A job was submitted on 10 September with a 16-hour deadline. CarbonShift chose
+**09:00 UTC on 11 September** — the German solar peak — and AWS executed it
+there, unattended, while the submitting machine was switched off.
+
+| | |
+|---|---|
+| Baseline (run immediately) | 17:00 UTC at **497 gCO₂/kWh** → 3.68 g CO₂ |
+| CarbonShift chose | 09:00 UTC at **251 gCO₂/kWh** → 1.86 g CO₂ |
+| Delay | 16 hours |
+| **CO₂ saved** | **1.82 g — 49.5%** |
+
+Verified in CloudWatch Logs:
+
+```
+[2026-09-11T09:01:07] CarbonShift worker starting
+[2026-09-11T09:01:07]   payload        : carbonshift-demo-run
+[2026-09-11T09:01:07]   scheduled for  : 2026-09-11T09:00:00+00:00
+[2026-09-11T09:01:07]   actual start   : 2026-09-11T09:01:07+00:00
+[2026-09-11T09:01:12]   checksum       : 8cca50fc7eb250ec
+[2026-09-11T09:01:12] CARBONSHIFT_JOB_COMPLETE {"payload": "carbonshift-demo-run", ...}
+```
+
+Scheduled for 09:00:00, started 09:01:07 — 67 seconds of Fargate cold start.
+The checksum is identical to the local `docker run`, so the same deterministic
+workload provably executed in both places.
 
 The full forecast curve behind that decision:
 
