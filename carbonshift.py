@@ -1,0 +1,288 @@
+"""CarbonShift, without having to remember any commands.
+
+    python carbonshift.py
+
+Everything the project can do, as a menu that asks plain questions. The
+individual commands still exist and still work -- this only drives them.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:  # pragma: no cover
+    pass
+
+BOLD, DIM, GREEN, RED, YELLOW, RESET = (
+    "\033[1m", "\033[2m", "\033[32m", "\033[31m", "\033[33m", "\033[0m",
+)
+if os.name == "nt" and not os.environ.get("WT_SESSION"):
+    try:
+        import colorama
+
+        colorama.just_fix_windows_console()
+    except Exception:
+        BOLD = DIM = GREEN = RED = YELLOW = RESET = ""
+
+
+def clear_ish():
+    print("\n" * 2)
+
+
+def rule(char="-", width=64):
+    print("  " + char * width)
+
+
+def ask(prompt, default=None):
+    suffix = f" [{default}]" if default is not None else ""
+    try:
+        value = input(f"  {prompt}{suffix}: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        print("  Cancelled.")
+        return None
+    if not value and default is not None:
+        return str(default)
+    return value
+
+
+def pause():
+    try:
+        input(f"\n  {DIM}Press Enter to return to the menu...{RESET}")
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+def load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# --- readiness -------------------------------------------------------------
+
+
+def readiness():
+    """Cheap, offline assessment of how far setup has got."""
+    env_exists = (REPO / ".env").exists()
+    key = os.getenv("ELECTRICITY_MAPS_API_KEY", "").strip()
+    has_key = bool(key) and key != "your-electricity-maps-token"
+
+    aws_vars = ["ECS_CLUSTER_ARN", "WORKER_TASK_DEFINITION_ARN",
+                "SCHEDULER_ROLE_ARN", "WORKER_SUBNET_IDS"]
+    has_aws = all(os.getenv(name, "").strip() for name in aws_vars)
+
+    return env_exists, has_key, has_aws
+
+
+def status_line():
+    env_exists, has_key, has_aws = readiness()
+
+    if not env_exists or not has_key:
+        return (f"  {YELLOW}Not set up yet.{RESET} Start with option 1.", False, False)
+    if not has_aws:
+        return (f"  {GREEN}Ready to preview decisions.{RESET} "
+                f"{DIM}AWS not configured, so jobs cannot run yet (option 5).{RESET}",
+                True, False)
+    return (f"  {GREEN}Fully set up.{RESET} "
+            f"{DIM}Jobs can be scheduled and will really run.{RESET}", True, True)
+
+
+# --- actions ---------------------------------------------------------------
+
+
+def action_setup():
+    print()
+    module = load_module(REPO / "setup.py", "carbonshift_setup")
+    try:
+        module.main()
+    except SystemExit:
+        pass
+    load_dotenv(override=True)
+
+
+def action_schedule(has_key, has_aws):
+    print()
+    if not has_key:
+        print(f"  {YELLOW}You need to set up first.{RESET} Choose option 1.")
+        return
+
+    print(f"{BOLD}  Schedule a job{RESET}")
+    rule()
+    print("  CarbonShift will find the cleanest hour before your deadline.")
+    print()
+
+    name = ask("What is the job called?", "my-job")
+    if name is None:
+        return
+
+    print()
+    print(f"  {DIM}The longer the deadline, the cleaner an hour it can reach.{RESET}")
+    hours = ask("How many hours until it must have started?", "12")
+    if hours is None:
+        return
+    try:
+        float(hours)
+    except ValueError:
+        print(f"  {RED}That is not a number.{RESET}")
+        return
+
+    if has_aws:
+        print()
+        print(f"  {BOLD}preview{RESET} decides and shows you, but changes nothing.")
+        print(f"  {BOLD}real{RESET}    creates the AWS schedule and the job will run.")
+        mode = ask("preview or real?", "preview")
+        if mode is None:
+            return
+        dry_run = not mode.lower().startswith("r")
+    else:
+        print()
+        print(f"  {DIM}AWS is not configured, so this will be a preview.{RESET}")
+        dry_run = True
+
+    argv = ["--payload", name, "--deadline-hours", hours]
+    if dry_run:
+        argv.append("--dry-run")
+
+    print()
+    rule()
+    from src import scheduler
+
+    code = scheduler.main(argv)
+    rule()
+
+    if code == 0:
+        print()
+        answer = ask("Draw the chart now? (y/n)", "y")
+        if answer and answer.lower().startswith("y"):
+            print()
+            chart = load_module(REPO / "demo" / "chart.py", "carbonshift_chart")
+            chart.main([])
+
+
+def action_history():
+    print()
+    from src import history
+
+    verify = ask("Check each run against AWS logs? (slower) (y/n)", "n")
+    if verify is None:
+        return
+    argv = ["--verify"] if verify.lower().startswith("y") else []
+    history.main(argv)
+
+
+def action_doctor():
+    print()
+    from src import doctor
+
+    doctor.main([])
+
+
+def action_deploy():
+    print()
+    print(f"{BOLD}  Deploy to AWS{RESET}")
+    rule()
+    print("  This creates the AWS resources CarbonShift needs:")
+    print("  an ECR repository, an ECS cluster, a log group, two IAM roles")
+    print("  and a Fargate task definition.")
+    print()
+    print(f"  {DIM}Safe to run more than once - it reuses anything already there.{RESET}")
+    print(f"  {DIM}You need 'aws configure' done first.{RESET}")
+    print()
+
+    answer = ask("Go ahead? (y/n)", "n")
+    if answer is None or not answer.lower().startswith("y"):
+        print("  Nothing was done.")
+        return
+
+    print()
+    deploy = load_module(REPO / "infra" / "deploy.py", "carbonshift_deploy")
+    try:
+        code = deploy.main([])
+    except SystemExit as exc:
+        code = exc.code or 0
+
+    if code == 0:
+        print()
+        print(f"  {YELLOW}Now paste those values into your .env file.{RESET}")
+        print(f"  {DIM}Then come back and run option 4 to check everything.{RESET}")
+
+
+# --- menu ------------------------------------------------------------------
+
+ACTIONS = [
+    ("Set up CarbonShift", "api key, region - writes your .env"),
+    ("Schedule a job", "pick a job and a deadline"),
+    ("See my history and savings", "every run, and the running total"),
+    ("Check my setup is healthy", "finds problems and how to fix them"),
+    ("Deploy to AWS", "one-time, creates the cloud resources"),
+    ("Quit", ""),
+]
+
+
+def main() -> int:
+    while True:
+        clear_ish()
+        print(f"{BOLD}  CarbonShift{RESET}")
+        print(f"  {DIM}Run cloud jobs when the electricity grid is cleanest.{RESET}")
+        print()
+
+        line, has_key, has_aws = status_line()
+        print(line)
+        print()
+        rule()
+
+        for index, (title, hint) in enumerate(ACTIONS, 1):
+            label = f"  {BOLD}{index}{RESET}. {title}"
+            if hint:
+                pad = " " * max(1, 30 - len(title))
+                label += f"{pad}{DIM}{hint}{RESET}"
+            print(label)
+        rule()
+        print()
+
+        choice = ask("Choose", "2" if has_key else "1")
+        if choice is None:
+            return 0
+
+        if choice == "1":
+            action_setup()
+        elif choice == "2":
+            _, has_key, has_aws = status_line()
+            action_schedule(has_key, has_aws)
+        elif choice == "3":
+            action_history()
+        elif choice == "4":
+            action_doctor()
+        elif choice == "5":
+            action_deploy()
+        elif choice in ("6", "q", "quit", "exit"):
+            print()
+            print("  Bye.")
+            return 0
+        else:
+            print()
+            print(f"  {RED}Pick a number from 1 to 6.{RESET}")
+
+        pause()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print()
+        print("  Bye.")
+        sys.exit(0)

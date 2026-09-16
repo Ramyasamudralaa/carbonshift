@@ -104,6 +104,38 @@ python setup.py
 token, **tests the token against the live API before accepting it**, and writes
 your `.env` for you. You don't have to know what any of the variables mean.
 
+### Don't want to remember commands?
+
+```bash
+python carbonshift.py
+```
+
+```
+  CarbonShift
+  Run cloud jobs when the electricity grid is cleanest.
+
+  Fully set up. Jobs can be scheduled and will really run.
+
+  ----------------------------------------------------------------
+  1. Set up CarbonShift            api key, region - writes your .env
+  2. Schedule a job                pick a job and a deadline
+  3. See my history and savings    every run, and the running total
+  4. Check my setup is healthy     finds problems and how to fix them
+  5. Deploy to AWS                 one-time, creates the cloud resources
+  6. Quit
+  ----------------------------------------------------------------
+
+  Choose [2]:
+```
+
+Pick `2` and it asks *"What is the job called?"* and *"How many hours until it
+must have started?"* — no flags to remember. The status line at the top tells
+you how far setup has got, and the menu refuses to schedule before you're ready
+rather than failing later.
+
+Every individual command below still works exactly as it did; the menu only
+drives them.
+
 ```bash
 python -m src.scheduler --payload "my-nightly-job" --deadline-hours 12 --dry-run
 ```
