@@ -253,6 +253,18 @@ per run**. A nightly job is classified one time and that answer is reused for
 all 365 runs that year. It also uses the smallest capable model. An AI call
 that cost more carbon than the shift saved would defeat the whole point.
 
+### Jobs that cannot start too early
+
+Some work has two constraints, not one. Data does not land until noon, so the
+job cannot start before then, but it still has to be finished by evening.
+
+```bash
+python -m src.scheduler --payload "afternoon-etl" --not-before 2026-09-17T12:00:00Z --deadline 2026-09-17T18:00:00Z
+```
+
+CarbonShift then picks the cleanest hour inside that window instead of the
+cleanest hour overall.
+
 ### Schedule a job for real
 
 ```bash

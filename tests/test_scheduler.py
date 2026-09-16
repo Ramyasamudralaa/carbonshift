@@ -582,3 +582,78 @@ def test_the_cli_treats_a_refused_shift_as_success_not_an_error(base_time, capsy
 
     assert exit_code == 0
     assert "NO SHIFT SCHEDULED" in capsys.readouterr().out
+
+
+# --- not_before: work that cannot start until something else is ready ------
+
+
+def test_not_before_excludes_earlier_hours(sample_forecast, base_time):
+    """The cleanest hour is at +6h; a not_before of +8h must rule it out."""
+    decision = schedule_job(
+        payload="demo",
+        deadline=base_time + timedelta(hours=11),
+        zone="DE",
+        dry_run=True,
+        now=base_time,
+        forecast=sample_forecast,
+        not_before=base_time + timedelta(hours=8),
+    )
+
+    assert decision.chosen.timestamp >= base_time + timedelta(hours=8)
+    assert decision.chosen.carbon_intensity == 240.0
+
+
+def test_without_not_before_the_global_minimum_still_wins(sample_forecast, base_time):
+    decision = schedule_job(
+        payload="demo",
+        deadline=base_time + timedelta(hours=11),
+        zone="DE",
+        dry_run=True,
+        now=base_time,
+        forecast=sample_forecast,
+    )
+
+    assert decision.chosen.carbon_intensity == 120.0
+
+
+def test_not_before_at_or_after_the_deadline_is_refused(sample_forecast, base_time):
+    with pytest.raises(SchedulerError) as excinfo:
+        schedule_job(
+            payload="demo",
+            deadline=base_time + timedelta(hours=4),
+            zone="DE",
+            dry_run=True,
+            now=base_time,
+            forecast=sample_forecast,
+            not_before=base_time + timedelta(hours=6),
+        )
+
+    assert "no hour could ever qualify" in str(excinfo.value)
+
+
+def test_a_naive_not_before_is_rejected(sample_forecast, base_time):
+    with pytest.raises(SchedulerError):
+        schedule_job(
+            payload="demo",
+            deadline=base_time + timedelta(hours=11),
+            zone="DE",
+            dry_run=True,
+            now=base_time,
+            forecast=sample_forecast,
+            not_before=datetime(2026, 9, 9, 8, 0),
+        )
+
+
+def test_not_before_never_overrides_the_scheduling_lead_time(sample_forecast, base_time):
+    """A not_before in the past must not let us book an hour already gone."""
+    decision = schedule_job(
+        payload="demo",
+        deadline=base_time + timedelta(hours=11),
+        zone="DE",
+        dry_run=True,
+        now=base_time + timedelta(hours=5),
+        forecast=sample_forecast,
+        not_before=base_time - timedelta(hours=3),
+    )
+
+    assert decision.chosen.timestamp >= base_time + timedelta(hours=5)

@@ -460,6 +460,7 @@ def schedule_job(
     forecast: Sequence[ForecastEntry] | None = None,
     scheduler_client: Any = None,
     require_improvement: bool = True,
+    not_before: datetime | None = None,
 ) -> Decision:
     """Fetch the forecast, choose the cleanest legal hour, and register the run.
 
@@ -475,6 +476,8 @@ def schedule_job(
         require_improvement: Refuse to shift when the best eligible hour is no
             cleaner than running immediately. Leave this on unless you have a
             reason to delay regardless of the carbon outcome.
+        not_before: Earliest acceptable start. For work that cannot begin until
+            something else is ready, such as data that lands at noon.
 
     Raises:
         NoSlotBeforeDeadlineError: nothing is bookable before the deadline.
@@ -497,6 +500,16 @@ def schedule_job(
     )
 
     earliest = now + timedelta(seconds=MIN_SCHEDULE_LEAD_SECONDS)
+    if not_before is not None:
+        if not_before.tzinfo is None:
+            raise SchedulerError("not_before must be timezone-aware")
+        if not_before >= deadline:
+            raise SchedulerError(
+                f"not_before {not_before.isoformat()} is at or after the deadline "
+                f"{deadline.isoformat()}, so no hour could ever qualify."
+            )
+        earliest = max(earliest, not_before)
+
     chosen = pick_best_slot(entries, deadline=deadline, earliest=earliest)
     baseline = baseline_slot(entries)
 
@@ -584,6 +597,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--deadline",
         help="Absolute ISO 8601 deadline, e.g. 2026-09-09T18:00:00Z.",
     )
+    parser.add_argument(
+        "--not-before",
+        help=(
+            "Earliest acceptable start, ISO 8601. For work that cannot begin "
+            "until something else is ready, e.g. 2026-09-17T12:00:00Z."
+        ),
+    )
     parser.add_argument("--region", default=AWS_REGION, help="AWS region.")
     parser.add_argument("--zone", default=None, help="Electricity Maps zone override.")
     parser.add_argument(
@@ -596,6 +616,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     now = datetime.now(timezone.utc)
     deadline = _parse_deadline(args, now)
 
+    not_before = None
+    if args.not_before:
+        text = args.not_before.replace("Z", "+00:00")
+        try:
+            not_before = datetime.fromisoformat(text)
+        except ValueError:
+            print(f"ERROR: could not parse --not-before {args.not_before!r}. "
+                  "Use an ISO 8601 timestamp, e.g. 2026-09-17T12:00:00Z",
+                  file=sys.stderr)
+            return 1
+        if not_before.tzinfo is None:
+            not_before = not_before.replace(tzinfo=timezone.utc)
+
     try:
         decision = schedule_job(
             payload=args.payload,
@@ -604,6 +637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             zone=args.zone,
             dry_run=args.dry_run,
             now=now,
+            not_before=not_before,
         )
     except ShiftNotWorthwhileError as exc:
         # A correct answer, not a failure: the cleanest moment is right now.
