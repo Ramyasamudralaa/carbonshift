@@ -381,9 +381,81 @@ def register_task_definition(ecs: Any, image_uri: str, execution_role_arn: str) 
 # --- Entry point -----------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
-    global AWS_REGION
+def provision(region: str, image_uri_override: str = "") -> tuple[dict[str, str], str]:
+    """Create every AWS resource and return the settings it produced.
 
+    Returns (settings, repository_uri). Raises DeployError on failure. Callers
+    get the values directly, so nobody has to copy ARNs out of a terminal and
+    paste them back into a file by hand.
+    """
+    global AWS_REGION
+    AWS_REGION = region
+
+    session = boto3.session.Session(region_name=AWS_REGION)
+    try:
+        account_id = session.client("sts").get_caller_identity()["Account"]
+    except NoCredentialsError:
+        raise DeployError(
+            "No AWS credentials found. Run `aws configure` first, or set "
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
+        )
+    except ClientError as exc:
+        raise _explain(exc, "Identifying your AWS account")
+
+    print(f"CarbonShift provisioning in {AWS_REGION} for account {account_id}")
+    print()
+
+    ecr = session.client("ecr")
+    ecs = session.client("ecs")
+    iam = session.client("iam")
+    logs = session.client("logs")
+    ec2 = session.client("ec2")
+
+    repository_uri = ensure_ecr_repository(ecr)
+    image_uri = image_uri_override or f"{repository_uri}:latest"
+
+    ensure_ecs_service_linked_role(iam)
+    cluster_arn = ensure_cluster(ecs)
+    ensure_log_group(logs)
+
+    execution_role_arn, exec_created = ensure_execution_role(iam)
+    scheduler_role_arn, sched_created = ensure_scheduler_role(
+        iam, account_id, execution_role_arn
+    )
+
+    if exec_created or sched_created:
+        step(f"Waiting {IAM_PROPAGATION_SECONDS}s for IAM to propagate")
+        time.sleep(IAM_PROPAGATION_SECONDS)
+
+    subnets, security_groups = discover_networking(ec2)
+    task_definition_arn = register_task_definition(ecs, image_uri, execution_role_arn)
+
+    settings = {
+        "AWS_REGION": AWS_REGION,
+        "ECS_CLUSTER_ARN": cluster_arn,
+        "WORKER_TASK_DEFINITION_ARN": task_definition_arn,
+        "SCHEDULER_ROLE_ARN": scheduler_role_arn,
+        "WORKER_SUBNET_IDS": ",".join(subnets),
+        "WORKER_SECURITY_GROUP_IDS": ",".join(security_groups),
+        "WORKER_ASSIGN_PUBLIC_IP": "ENABLED",
+        "WORKER_IMAGE_URI": image_uri,
+    }
+    return settings, repository_uri
+
+
+def push_commands(image_uri: str, region: str) -> list[str]:
+    """The four commands that put the worker image where Fargate can pull it."""
+    registry = image_uri.split("/")[0]
+    return [
+        "docker build -t carbonshift-worker src/worker",
+        f"aws ecr get-login-password --region {region} | "
+        f"docker login --username AWS --password-stdin {registry}",
+        f"docker tag carbonshift-worker {image_uri}",
+        f"docker push {image_uri}",
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="carbonshift-deploy",
         description="Provision the AWS resources CarbonShift needs.",
@@ -398,77 +470,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--region", default=AWS_REGION, help="AWS region.")
     args = parser.parse_args(argv)
-    AWS_REGION = args.region
-
-    session = boto3.session.Session(region_name=AWS_REGION)
-    try:
-        account_id = session.client("sts").get_caller_identity()["Account"]
-    except NoCredentialsError:
-        print(
-            "ERROR: No AWS credentials found. Run `aws configure`, or set "
-            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.",
-            file=sys.stderr,
-        )
-        return 1
-    except ClientError as exc:
-        print(f"ERROR: {_explain(exc, 'Identifying your AWS account')}", file=sys.stderr)
-        return 1
-
-    print(f"CarbonShift provisioning in {AWS_REGION} for account {account_id}\n")
-
-    ecr = session.client("ecr")
-    ecs = session.client("ecs")
-    iam = session.client("iam")
-    logs = session.client("logs")
-    ec2 = session.client("ec2")
 
     try:
-        repository_uri = ensure_ecr_repository(ecr)
-        image_uri = args.image_uri or f"{repository_uri}:latest"
-
-        ensure_ecs_service_linked_role(iam)
-        cluster_arn = ensure_cluster(ecs)
-        ensure_log_group(logs)
-
-        execution_role_arn, exec_created = ensure_execution_role(iam)
-        scheduler_role_arn, sched_created = ensure_scheduler_role(
-            iam, account_id, execution_role_arn
-        )
-
-        if exec_created or sched_created:
-            step(f"Waiting {IAM_PROPAGATION_SECONDS}s for IAM to propagate")
-            time.sleep(IAM_PROPAGATION_SECONDS)
-
-        subnets, security_groups = discover_networking(ec2)
-        task_definition_arn = register_task_definition(
-            ecs, image_uri, execution_role_arn
-        )
+        settings, _ = provision(args.region, args.image_uri)
     except DeployError as exc:
-        print(f"\nERROR: {exc}", file=sys.stderr)
+        print()
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
-    print("\n" + "=" * 72)
+    print()
+    print("=" * 72)
     print("Provisioning complete. Paste these into your .env:")
     print("=" * 72)
-    print(f"AWS_REGION={AWS_REGION}")
-    print(f"ECS_CLUSTER_ARN={cluster_arn}")
-    print(f"WORKER_TASK_DEFINITION_ARN={task_definition_arn}")
-    print(f"SCHEDULER_ROLE_ARN={scheduler_role_arn}")
-    print(f"WORKER_SUBNET_IDS={','.join(subnets)}")
-    print(f"WORKER_SECURITY_GROUP_IDS={','.join(security_groups)}")
-    print("WORKER_ASSIGN_PUBLIC_IP=ENABLED")
-    print(f"WORKER_IMAGE_URI={image_uri}")
+    for key, value in settings.items():
+        print(f"{key}={value}")
     print("=" * 72)
+    print()
+    print("Or skip the pasting entirely by running:  python setup.py")
 
     if not args.image_uri:
-        print("\nNext: build and push the worker image before scheduling a run.")
-        print(
-            f"  aws ecr get-login-password --region {AWS_REGION} | "
-            f"docker login --username AWS --password-stdin {repository_uri.split('/')[0]}"
-        )
-        print("  docker build -t carbonshift-worker src/worker")
-        print(f"  docker tag carbonshift-worker {image_uri}")
-        print(f"  docker push {image_uri}")
+        print()
+        print("Next: build and push the worker image before scheduling a run.")
+        for command in push_commands(settings["WORKER_IMAGE_URI"],
+                                     settings["AWS_REGION"]):
+            print(f"  {command}")
 
     return 0
 

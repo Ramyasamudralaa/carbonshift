@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -169,6 +170,107 @@ def test_api_key(key, zone):
     )
 
 
+def _load_deploy():
+    """Import infra/deploy.py by path, since infra/ is not a package."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "carbonshift_deploy", HERE / "infra" / "deploy.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def docker_is_running() -> bool:
+    if not shutil.which("docker"):
+        return False
+    try:
+        result = subprocess.run(
+            ["docker", "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def build_and_push_image(image_uri: str, region: str) -> bool:
+    """Build the worker image and put it where Fargate can pull it."""
+    try:
+        commands = _load_deploy().push_commands(image_uri, region)
+    except Exception as exc:
+        bad(f"Could not work out the push commands: {exc}")
+        return False
+
+    for command in commands:
+        detail_name = command.split()[0] + " " + command.split()[1]
+        say(f"    running {detail_name} ...")
+        try:
+            result = subprocess.run(command, shell=True, timeout=900)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            bad(f"That command failed: {exc}")
+            return False
+        if result.returncode != 0:
+            bad("That command failed. Run it yourself to see why:")
+            say(f"      {command}")
+            return False
+    return True
+
+
+def run_provisioning(region: str) -> dict:
+    """Create the AWS resources and hand back the settings they produced."""
+    try:
+        deploy = _load_deploy()
+    except Exception as exc:
+        bad(f"Could not load the provisioning script: {exc}")
+        return {}
+
+    say()
+    try:
+        settings, _ = deploy.provision(region)
+    except Exception as exc:
+        say()
+        bad(f"{exc}")
+        say()
+        note("Nothing was written to your .env. Fix the problem above and")
+        note("run 'python setup.py' again. Re-running is safe.")
+        return {}
+
+    say()
+    ok("AWS resources ready. Settings captured, no copying needed.")
+
+    image_uri = settings.get("WORKER_IMAGE_URI", "")
+    say()
+    say("  One thing left: the worker image has to be uploaded to AWS,")
+    say("  or a scheduled job will have nothing to run.")
+    say()
+
+    if not docker_is_running():
+        bad("Docker is not running, so the image cannot be built now.")
+        say()
+        say("  Start Docker Desktop, then run these four commands:")
+        for command in build_commands_for(image_uri, region):
+            say(f"    {command}")
+        return settings
+
+    if ask_yes_no("Build and upload it now? (a few minutes)", True):
+        if build_and_push_image(image_uri, region):
+            ok("Worker image uploaded.")
+        else:
+            say()
+            note("The image was not uploaded. Everything else is set up.")
+            note("Check 'python -m src.doctor' to see what is missing.")
+    return settings
+
+
+def build_commands_for(image_uri: str, region: str) -> list[str]:
+    try:
+        return _load_deploy().push_commands(image_uri, region)
+    except Exception:
+        return ["docker build -t carbonshift-worker src/worker",
+                f"docker push {image_uri}"]
+
+
 def check_aws():
     try:
         import boto3
@@ -310,22 +412,49 @@ def main():
             key = ask("Paste your API key again")
 
     # 4 --------------------------------------------------------------------
-    step(4, total, "AWS (optional)")
-    say("  You only need AWS to actually RUN jobs.")
-    say("  Without it, CarbonShift still shows you the decision and the chart.")
+    step(4, total, "AWS")
+    say("  You need AWS only if you want jobs to actually RUN.")
+    say("  Without it, CarbonShift still shows you every decision and chart.")
     say()
 
+    aws_settings: dict[str, str] = {}
     account = check_aws() if has_boto3 else None
-    if account:
-        ok(f"AWS credentials found - account {account}")
+
+    if not has_boto3:
+        bad("boto3 is not installed, so AWS cannot be set up.")
+        note("Fix it with: pip install -r requirements.txt")
+    elif not account:
+        bad("No AWS credentials found on this machine.")
         say()
-        say("  To finish AWS setup, after this run:")
-        say(f"    {BOLD}python infra/deploy.py{RESET}")
-        say("  then paste the values it prints into .env")
-    else:
-        note("No AWS credentials found - that is fine for now.")
-        note("You can preview every decision with --dry-run.")
-        note("To add AWS later: run 'aws configure', then 'python infra/deploy.py'.")
+        say("  To use AWS, do this once in another terminal window:")
+        say()
+        say("    1. Install the AWS CLI from aws.amazon.com/cli")
+        say(f"    2. Run {BOLD}aws configure{RESET} and paste your access key")
+        say()
+        note("Do not paste your secret key here. It goes into aws configure.")
+        say()
+        if ask_yes_no("Done that in another window? Check again now?", False):
+            account = check_aws()
+            if not account:
+                bad("Still no credentials. You can finish the AWS part later.")
+
+    if account:
+        ok(f"AWS credentials found for account {account}")
+        say()
+        say("  I can create the AWS resources now and write every setting into")
+        say("  your .env for you. There is nothing to copy by hand.")
+        say()
+        note("Safe to run even if you have done it before. It reuses whatever")
+        note("already exists rather than making duplicates.")
+        say()
+        if ask_yes_no("Set up AWS now? (about a minute)", True):
+            aws_settings = run_provisioning(region)
+        else:
+            note("Skipped. Run 'python setup.py' again whenever you want it.")
+
+    if not account and not aws_settings:
+        say()
+        note("Carrying on without AWS. Everything except running jobs will work.")
 
     # 5 --------------------------------------------------------------------
     step(5, total, "Writing your .env")
@@ -334,6 +463,7 @@ def main():
         "CARBON_ZONE": zone,
         "AWS_REGION": region,
     })
+    values.update(aws_settings)
     write_env(values)
     ok(f"Wrote {ENV_PATH.name}")
 

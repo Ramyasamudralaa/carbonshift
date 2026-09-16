@@ -441,54 +441,27 @@ without it.
 
 ### Steps
 
-**1. Create the AWS resources.**
+**1. Run the setup helper again.**
 
 ```bash
-python infra/deploy.py
+python setup.py
 ```
 
-This makes an image repository, a cluster, a log group, two permission roles,
-and a task definition. It is safe to run more than once. It reuses anything
-that already exists.
+Once it sees your AWS credentials it offers to do the whole thing for you. It
+creates the resources, writes every setting into your `.env` by itself, then
+builds and uploads the worker image.
 
-When it finishes it prints about eight lines of settings.
+**There is nothing to copy and paste.** Say yes and wait about a minute.
 
-**2. Paste those lines into your `.env` file.**
+It is safe to run more than once. It reuses anything that already exists.
 
-```bash
-notepad .env
-```
-
-This is the one step you still do by hand.
-
-**3. Build and upload the worker.**
-
-`deploy.py` prints these four commands with your own account number already
-filled in.
-
-```bash
-docker build -t carbonshift-worker src/worker
-```
-
-```bash
-aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin <your-account>.dkr.ecr.eu-central-1.amazonaws.com
-```
-
-```bash
-docker tag carbonshift-worker <your-ecr-uri>:latest
-```
-
-```bash
-docker push <your-ecr-uri>:latest
-```
-
-**4. Check it all worked.**
+**2. Check it all worked.**
 
 ```bash
 python -m src.doctor
 ```
 
-**5. Book a real job.**
+**3. Book a real job.**
 
 ```bash
 python -m src.scheduler --payload "nightly-backup" --deadline-hours 12
