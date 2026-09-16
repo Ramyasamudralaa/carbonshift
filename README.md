@@ -373,6 +373,53 @@ python -m src.history
 Dry runs are always excluded from the totals — they never executed, so counting
 them would inflate the number.
 
+### When something isn't working
+
+```bash
+python -m src.doctor
+```
+
+Scheduling is asynchronous — the job fires hours later on a machine you aren't
+watching. So the failures that matter most are the silent ones. If the worker
+image is missing from ECR, `scheduler.py` still creates the schedule perfectly;
+ECS then fails to pull it at 03:00, the container never starts, so there is no
+log, and the schedule has already deleted itself. **You would wake up to no
+evidence at all.**
+
+The doctor checks all of that up front, in one pass, and prints the command
+that fixes each problem:
+
+```
+  Your machine
+  OK    Python version      3.11.4
+  OK    Core dependencies   requests, python-dotenv, matplotlib
+  OK    .env file           .env
+
+  Carbon data
+  OK    API key             set (35 characters)
+  OK    Live forecast       24 points, 128-416 gCO2/kWh (3.2x swing)
+
+  AWS
+  OK    ECS cluster         carbonshift-cluster (ACTIVE)
+  OK    Task definition     carbonshift-worker:1 (ACTIVE)
+  FAIL  Worker image        RepositoryNotFoundException
+           -> The image is missing, so a scheduled job would fail silently.
+           -> docker build -t carbonshift-worker src/worker
+           -> docker push <your-ecr-uri>:latest
+
+  Run history
+  WARN  Execution confirmed 3 of 4 confirmed, 1 with no log
+           -> python -m src.history --verify   to see which
+```
+
+It checks the machine, your API key against the live API, every AWS resource
+your `.env` points at, whether the worker image is really in ECR, the Docker
+daemon, and whether past scheduled runs actually produced a CloudWatch log.
+
+`--quick` skips the network calls. Exit code is `0` if nothing failed and `1`
+if something did, so it works in CI. Missing AWS credentials is a **warning**,
+not a failure — the `--dry-run` path doesn't need them.
+
 ---
 
 ## How the carbon maths works
