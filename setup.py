@@ -102,6 +102,7 @@ def check_python():
 
 
 def check_dependencies():
+    """Check everything CarbonShift needs, and say what each thing is for."""
     missing = []
     for module, package in [
         ("requests", "requests"),
@@ -119,16 +120,57 @@ def check_dependencies():
         say("  Install them first, then run this again:")
         say(f"  {BOLD}pip install -r requirements.txt{RESET}")
         sys.exit(1)
-    ok("requests, python-dotenv, matplotlib installed")
+    ok("Python packages       requests, python-dotenv, matplotlib")
+
+    blockers = []
 
     try:
         import boto3  # noqa: F401
 
-        ok("boto3 installed (needed only to schedule real AWS jobs)")
-        return True
+        has_boto3 = True
+        ok("boto3                 installed")
     except ImportError:
-        note("boto3 not installed - you can still preview decisions with --dry-run")
-        return False
+        has_boto3 = False
+        bad("boto3                 not installed")
+        say("                        Needed to talk to AWS.")
+        say(f"                        Fix: {BOLD}pip install -r requirements.txt{RESET}")
+        blockers.append("boto3")
+
+    cli_state, cli_detail = aws_cli_status()
+    if cli_state == "installed":
+        ok(f"AWS CLI               {cli_detail}")
+    else:
+        bad(f"AWS CLI               {cli_detail}")
+        say("                        Needed to sign in to AWS and upload the image.")
+        say(f"                        Get it: {BOLD}{DOWNLOAD_AWS_CLI}{RESET}")
+        say("                        Then run: aws configure")
+        blockers.append("AWS CLI")
+
+    docker_state, docker_detail = docker_status()
+    if docker_state == "running":
+        ok(f"Docker Desktop        {docker_detail}")
+    elif docker_state == "stopped":
+        bad(f"Docker Desktop        {docker_detail}")
+        say("                        Start it and wait for 'Engine running'.")
+        blockers.append("Docker (not started)")
+    else:
+        bad(f"Docker Desktop        {docker_detail}")
+        say("                        Needed to build the job container.")
+        say(f"                        Get it: {BOLD}{DOWNLOAD_DOCKER}{RESET}")
+        blockers.append("Docker Desktop")
+
+    say()
+    if blockers:
+        say(f"  {YELLOW}{len(blockers)} thing(s) missing: {', '.join(blockers)}.{RESET}")
+        say("  Without them CarbonShift can still show you every decision and")
+        say(f"  chart, but {BOLD}your jobs will not actually run in the cloud{RESET}.")
+        say()
+        say("  You can carry on now and install them later. Re-running")
+        say("  setup.py will pick up where you left off.")
+    else:
+        ok("Everything needed for the full product is present.")
+
+    return has_boto3
 
 
 def test_api_key(key, zone):
@@ -214,17 +256,44 @@ def _load_deploy():
     return module
 
 
-def docker_is_running() -> bool:
+DOWNLOAD_DOCKER = "https://www.docker.com/products/docker-desktop/"
+DOWNLOAD_AWS_CLI = "https://aws.amazon.com/cli/"
+
+
+def docker_status() -> tuple[str, str]:
+    """Returns (state, detail) where state is missing, stopped or running.
+
+    Missing and stopped need completely different advice, so they must not be
+    collapsed into one answer.
+    """
     if not shutil.which("docker"):
-        return False
+        return "missing", "not installed"
     try:
         result = subprocess.run(
             ["docker", "info", "--format", "{{.ServerVersion}}"],
             capture_output=True, text=True, timeout=20,
         )
     except (subprocess.TimeoutExpired, OSError):
-        return False
-    return result.returncode == 0 and bool(result.stdout.strip())
+        return "stopped", "installed, but not responding"
+    if result.returncode == 0 and result.stdout.strip():
+        return "running", f"running, version {result.stdout.strip()}"
+    return "stopped", "installed, but not started"
+
+
+def aws_cli_status() -> tuple[str, str]:
+    if not shutil.which("aws"):
+        return "missing", "not installed"
+    try:
+        result = subprocess.run(["aws", "--version"], capture_output=True,
+                                text=True, timeout=20)
+    except (subprocess.TimeoutExpired, OSError):
+        return "missing", "installed, but not responding"
+    text = (result.stdout or result.stderr).strip().split()
+    return "installed", text[0] if text else "installed"
+
+
+def docker_is_running() -> bool:
+    return docker_status()[0] == "running"
 
 
 def build_and_push_image(image_uri: str, region: str) -> bool:
@@ -278,12 +347,27 @@ def run_provisioning(region: str) -> dict:
     say("  or a scheduled job will have nothing to run.")
     say()
 
-    if not docker_is_running():
-        bad("Docker is not running, so the image cannot be built now.")
+    state, _ = docker_status()
+    if state != "running":
+        if state == "missing":
+            bad("Docker Desktop is not installed, so the image cannot be built.")
+            say()
+            say("  Your jobs will NOT run in the cloud until this is done.")
+            say()
+            say(f"  1. Install Docker Desktop:  {BOLD}{DOWNLOAD_DOCKER}{RESET}")
+            say("  2. Start it and wait for it to say 'Engine running'")
+            say("  3. Run  python setup.py  again")
+        else:
+            bad("Docker Desktop is installed but not running.")
+            say()
+            say("  Start Docker Desktop, wait for 'Engine running',")
+            say("  then run  python setup.py  again.")
         say()
-        say("  Start Docker Desktop, then run these four commands:")
+        say("  Or do it by hand with these four commands:")
         for command in build_commands_for(image_uri, region):
             say(f"    {command}")
+        say()
+        note("Everything else is set up. Only the image upload is outstanding.")
         return settings
 
     if ask_yes_no("Build and upload it now? (a few minutes)", True):
@@ -370,14 +454,15 @@ def main():
     say(f"{BOLD}CarbonShift setup{RESET}")
     say("Runs your cloud jobs when the electricity grid is cleanest.")
     say()
-    say("This asks a few questions and writes your .env file.")
-    say("It checks each answer works before moving on.")
+    say("To run jobs in the cloud you need three things: an Electricity Maps")
+    say("token, an AWS account, and Docker Desktop. This checks for each of")
+    say("them, tells you where to get anything missing, and sets up the rest.")
 
     total = 6
     values = load_existing()
 
     # 1 --------------------------------------------------------------------
-    step(1, total, "Checking your machine")
+    step(1, total, "What you have, and what CarbonShift needs")
     check_python()
     has_boto3 = check_dependencies()
 

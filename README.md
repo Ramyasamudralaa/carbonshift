@@ -446,14 +446,22 @@ rewriting two files, not redesigning the project.
 
 ## Full setup with AWS
 
-You only need this if you want jobs to actually run. Everything above works
-without it.
+This is the real product. Everything above is how you try it before committing
+to the cloud setup.
 
 ### What you need first
 
-* An AWS account
-* AWS CLI installed, and `aws configure` already done
-* Docker Desktop installed and running
+Three things, and `python setup.py` checks for all of them and tells you where
+to get anything missing:
+
+| What | Why | Where |
+|:--|:--|:--|
+| An AWS account | Runs the job | aws.amazon.com |
+| AWS CLI, with `aws configure` done | Signs in, uploads the image | aws.amazon.com/cli |
+| Docker Desktop, running | Builds the job container | docker.com/products/docker-desktop |
+
+Without Docker your jobs cannot run in the cloud at all, because there is no
+image for AWS to pull.
 
 ### Steps
 
