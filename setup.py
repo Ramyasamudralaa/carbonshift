@@ -170,6 +170,39 @@ def test_api_key(key, zone):
     )
 
 
+def test_anthropic_key(key: str):
+    """One tiny call, so a wrong key is caught here rather than mid scan."""
+    import requests
+
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        return False, f"Could not reach the service: {exc}"
+
+    if response.status_code == 401:
+        return False, "That key was rejected. Check you copied all of it."
+    if response.status_code == 400:
+        return False, "The service did not accept the request. Is the key complete?"
+    if response.status_code == 429:
+        return False, "Rate limited. Wait a moment and try again."
+    if response.status_code >= 400:
+        return False, f"The service returned HTTP {response.status_code}."
+    return True, "Key works."
+
+
 def _load_deploy():
     """Import infra/deploy.py by path, since infra/ is not a package."""
     import importlib.util
@@ -302,7 +335,7 @@ def load_existing():
 
 def write_env(values):
     if ENV_PATH.exists():
-        backup = ENV_PATH.with_suffix(".env.backup")
+        backup = ENV_PATH.with_name(".env.backup")
         shutil.copy2(ENV_PATH, backup)
         note(f"Existing .env backed up to {backup.name}")
 
@@ -340,7 +373,7 @@ def main():
     say("This asks a few questions and writes your .env file.")
     say("It checks each answer works before moving on.")
 
-    total = 5
+    total = 6
     values = load_existing()
 
     # 1 --------------------------------------------------------------------
@@ -457,13 +490,64 @@ def main():
         note("Carrying on without AWS. Everything except running jobs will work.")
 
     # 5 --------------------------------------------------------------------
-    step(5, total, "Writing your .env")
+    step(5, total, "AI job scanner (optional)")
+    say("  CarbonShift can read your scheduled jobs and work out which ones")
+    say("  could be delayed to a cleaner hour, and which ones must not be.")
+    say()
+    say("  It does this two ways:")
+    say()
+    say(f"    {BOLD}Built in rules{RESET}   Free. No key, no internet, no energy used.")
+    say("                     Good on clear names like backup or healthcheck.")
+    say()
+    say(f"    {BOLD}Claude{RESET}           Better on unclear names. Needs a paid API key.")
+    say()
+    note("The AI reads each job once, not once per run, so the energy it costs")
+    note("is spread across every future run of that job.")
+    say()
+    note("You can skip this. The built in rules work without any key.")
+    say()
+
+    existing_ai = values.get("ANTHROPIC_API_KEY", "").strip()
+    if existing_ai:
+        ok("An Anthropic key is already saved.")
+        if not ask_yes_no("Replace it?", False):
+            ai_key = existing_ai
+        else:
+            ai_key = ""
+    else:
+        ai_key = ""
+
+    if not existing_ai or not ai_key:
+        if ask_yes_no("Add an Anthropic API key for the AI scanner?", False):
+            say()
+            say("  Get one at console.anthropic.com. It starts with sk-ant-")
+            say()
+            candidate = ask("Paste your Anthropic key")
+            say()
+            say("  Testing it...")
+            good, message = test_anthropic_key(candidate)
+            if good:
+                ok(message)
+                ai_key = candidate
+            else:
+                bad(message)
+                note("Skipping the AI. The built in rules still work.")
+                ai_key = existing_ai
+        else:
+            note("Skipped. The scanner will use the built in rules.")
+            note("Add a key later by running setup.py again.")
+            ai_key = existing_ai
+
+    # 5 --------------------------------------------------------------------
+    step(6, total, "Writing your settings")
     values.update({
         "ELECTRICITY_MAPS_API_KEY": key,
         "CARBON_ZONE": zone,
         "AWS_REGION": region,
     })
     values.update(aws_settings)
+    if ai_key:
+        values["ANTHROPIC_API_KEY"] = ai_key
     write_env(values)
     ok(f"Wrote {ENV_PATH.name}")
 
@@ -484,6 +568,14 @@ def main():
     say(f"  {BOLD}And your saved history:{RESET}")
     say()
     say("    python -m src.history")
+    say()
+    say(f"  {BOLD}Find which of your jobs could be shifted:{RESET}")
+    say()
+    say("    python -m src.scanner --cron demo/sample-crontab")
+    say()
+    say(f"  {BOLD}Or just use the menu:{RESET}")
+    say()
+    say("    python carbonshift.py")
     say()
 
 

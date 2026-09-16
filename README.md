@@ -124,6 +124,10 @@ python setup.py
 It asks you a few questions and writes your settings file for you. You never
 have to edit any config by hand.
 
+It walks through six steps: your machine, your region, your carbon API token,
+AWS (optional), the AI scanner (optional), and then it writes everything. Both
+optional steps can be skipped and added later by running it again.
+
 It will ask for an API token. Get a free one at
 [portal.electricitymaps.com](https://portal.electricitymaps.com/). The helper
 tests your token against the live service before it accepts it, so a wrong
