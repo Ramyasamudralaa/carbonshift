@@ -1,0 +1,23 @@
+# A realistic production crontab, for trying the scanner:
+#   python -m src.scanner --cron demo/sample-crontab
+#
+# Eight of these twelve jobs are deferrable. Four are not.
+
+MAILTO=ops@example.com
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# --- keeping things alive: cannot be delayed -------------------------------
+*/5 * * * *   /usr/local/bin/healthcheck.sh --endpoint api
+* * * * *     /opt/monitoring/heartbeat.py
+*/2 * * * *   /opt/alerts/send_alert_queue.py
+*/10 * * * *  /opt/api/warm_cache.py
+
+# --- batch work: nobody is waiting on it -----------------------------------
+0 2 * * *     /opt/jobs/backup_database.sh --full
+30 3 * * *    /opt/jobs/etl_warehouse_load.py
+15 1 * * *    /usr/bin/logrotate /etc/logrotate.conf
+@daily        /opt/jobs/cleanup_temp_files.sh
+0 23 * * *    /opt/ml/retrain_model.py --epochs 50
+0 4 * * 0     /opt/jobs/reindex_search.py
+0 6 * * 1     /opt/reports/generate_weekly_report.py --email
+0 5 1 * *     /opt/billing/compute_invoices.py

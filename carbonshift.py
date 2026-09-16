@@ -95,7 +95,7 @@ def status_line():
         return (f"  {YELLOW}Not set up yet.{RESET} Start with option 1.", False, False)
     if not has_aws:
         return (f"  {GREEN}Ready to preview decisions.{RESET} "
-                f"{DIM}AWS not configured, so jobs cannot run yet (option 7).{RESET}",
+                f"{DIM}AWS not configured, so jobs cannot run yet (option 8).{RESET}",
                 True, False)
     return (f"  {GREEN}Fully set up.{RESET} "
             f"{DIM}Jobs can be scheduled and will really run.{RESET}", True, True)
@@ -251,6 +251,47 @@ def action_report():
     report.main(argv)
 
 
+def action_scan():
+    print()
+    print(f"{BOLD}  Scan for shiftable jobs{RESET}")
+    rule()
+    print("  Reads your scheduled jobs and works out which ones could be")
+    print("  delayed to a cleaner hour, and what that would save per year.")
+    print()
+
+    print(f"    {BOLD}1{RESET}. A crontab file")
+    print(f"    {BOLD}2{RESET}. My AWS EventBridge schedules")
+    print(f"    {BOLD}3{RESET}. The bundled example {DIM}(demo/sample-crontab){RESET}")
+    print()
+    source = ask("Which", "3")
+    if source is None:
+        return
+
+    if source == "1":
+        path = ask("Path to the crontab file")
+        if not path:
+            return
+        argv = ["--cron", path]
+    elif source == "2":
+        argv = ["--aws"]
+    else:
+        argv = ["--cron", str(REPO / "demo" / "sample-crontab")]
+
+    if os.getenv("ANTHROPIC_API_KEY", "").strip():
+        use = ask("Use Claude to classify them? (more accurate) (y/n)", "y")
+        if use and use.lower().startswith("y"):
+            argv += ["--engine", "claude"]
+    else:
+        print()
+        print(f"  {DIM}No ANTHROPIC_API_KEY set, so the built-in rules will be{RESET}")
+        print(f"  {DIM}used. They need no key and cost no energy.{RESET}")
+
+    print()
+    from src import scanner
+
+    scanner.main(argv)
+
+
 def action_doctor():
     print()
     from src import doctor
@@ -296,6 +337,7 @@ ACTIONS = [
     ("Open the live dashboard", "charts and a countdown, in your browser"),
     ("See my history and savings", "every run, and the running total"),
     ("Generate a carbon report", "monthly report you can file or print"),
+    ("Scan for shiftable jobs", "which of your jobs could be shifted"),
     ("Check my setup is healthy", "finds problems and how to fix them"),
     ("Deploy to AWS", "one-time, creates the cloud resources"),
     ("Quit", ""),
@@ -339,16 +381,18 @@ def main() -> int:
         elif choice == "5":
             action_report()
         elif choice == "6":
-            action_doctor()
+            action_scan()
         elif choice == "7":
+            action_doctor()
+        elif choice == "8":
             action_deploy()
-        elif choice in ("8", "q", "quit", "exit"):
+        elif choice in ("9", "q", "quit", "exit"):
             print()
             print("  Bye.")
             return 0
         else:
             print()
-            print(f"  {RED}Pick a number from 1 to 8.{RESET}")
+            print(f"  {RED}Pick a number from 1 to 9.{RESET}")
 
         pause()
 

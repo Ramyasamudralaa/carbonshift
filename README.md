@@ -405,6 +405,76 @@ python -m src.history
 Dry runs are always excluded from the totals — they never executed, so counting
 them would inflate the number.
 
+### Finding which jobs are shiftable
+
+```bash
+python -m src.scanner --cron demo/sample-crontab
+```
+
+CarbonShift can move a job you already know is flexible. The harder question is
+**which of the forty jobs in your crontab are flexible at all** — that means
+reading each one and judging whether anybody is waiting on its output.
+
+```
+  SHIFTABLE
+    backup_database.sh          0.421 kg/yr  high
+      looks like a backup, running 365x a year
+    etl_warehouse_load.py       0.421 kg/yr  high
+      looks like an ETL job, running 365x a year
+    retrain_model.py            0.421 kg/yr  high
+      looks like model retraining, running 365x a year
+
+  NOT SHIFTABLE
+    healthcheck.sh             looks like health checking - something is waiting on it
+    heartbeat.py               looks like heartbeats - something is waiting on it
+    send_alert_queue.py        looks like alerting - something is waiting on it
+
+  8 of 12 jobs look shiftable.
+  Potential saving: 2.239 kg CO2 per year
+  Assumes 2 vCPU x 0.5 h per run on the DE grid,
+  moving from a typical 303 to a reachable 147 gCO2/kWh.
+```
+
+The saving is grounded in a **live forecast for your own grid zone**, not a
+generic figure.
+
+| Source | Flag |
+|---|---|
+| A crontab file | `--cron /etc/crontab` |
+| Standard input | `--cron -` |
+| Your EventBridge schedules | `--aws` |
+| Machine-readable output | `--json` |
+
+#### Two classifiers
+
+**`--engine heuristic`** (default) — rules over the command text and the run
+frequency. **No API key, no network, no energy cost.** Frequency is the
+strongest single signal: anything running more often than hourly is keeping
+something alive, not batching.
+
+**`--engine claude`** — an LLM reads each job. Better on ambiguous names. Needs
+`ANTHROPIC_API_KEY`; falls back to the heuristic if it's absent, unreachable,
+or returns something unusable.
+
+#### Why the AI doesn't pick the hour
+
+Choosing the cleanest hour is `min()` over 24 numbers. An LLM there would be
+slower, cost money, and give different answers on different runs. Deciding
+whether `warm_cache.py` can wait six hours is judgement, and that is the part
+worth an LLM.
+
+#### The energy arithmetic
+
+An LLM call costs carbon too — enough to wipe out a single job's saving. So
+classification runs **once per job definition, not once per execution**. A
+nightly job classified once is reused across all 365 of its runs, so the energy
+spent classifying amortises to approximately nothing. The default model is the
+smallest capable one for the same reason.
+
+> The scanner suggests; it does not decide. It reasons from names and
+> frequencies, and says so. Check each recommendation against what you know
+> before shifting anything.
+
 ### Carbon reports — the evidence, not just the number
 
 ```bash
