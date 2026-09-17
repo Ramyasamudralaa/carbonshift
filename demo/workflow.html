@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CarbonShift — How It Works</title>
+<style>
+  html,body{margin:0;padding:0;background:#0d1620;height:100%;overflow:hidden}
+  svg{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<svg viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"
+     font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5d7f9a"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="#0d1620"/>
+
+  <text x="105" y="58" fill="#eef4f9" font-size="36" font-weight="700">CarbonShift</text>
+  <text x="325" y="58" fill="#7d9bb3" font-size="24">— run cloud jobs when the electricity is cleanest</text>
+
+  <!-- ============ BAND 1 ============ -->
+  <text x="105" y="128" fill="#4ade80" font-size="21" font-weight="700">1 &#183; DECIDE</text>
+  <text x="258" y="128" fill="#6b8ba5" font-size="19">nothing has run yet</text>
+
+  <rect x="105" y="148" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="130" y="192" fill="#eef4f9" font-size="22" font-weight="600">Your job</text>
+  <text x="130" y="226" fill="#9fb8cb" font-size="17">plus one question:</text>
+  <text x="130" y="252" fill="#9fb8cb" font-size="17">finish it by when?</text>
+
+  <rect x="465" y="148" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="490" y="192" fill="#eef4f9" font-size="22" font-weight="600">Carbon forecast</text>
+  <text x="490" y="226" fill="#9fb8cb" font-size="17">24 hours ahead, live,</text>
+  <text x="490" y="252" fill="#9fb8cb" font-size="17">for your own grid zone</text>
+
+  <rect x="825" y="148" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="850" y="192" fill="#eef4f9" font-size="22" font-weight="600">Cut the deadline</text>
+  <text x="850" y="226" fill="#9fb8cb" font-size="17">throw away every hour</text>
+  <text x="850" y="252" fill="#9fb8cb" font-size="17">after your deadline</text>
+
+  <rect x="1185" y="148" width="310" height="132" rx="14" fill="#16242f" stroke="#4ade80" stroke-width="2.5"/>
+  <text x="1210" y="192" fill="#4ade80" font-size="22" font-weight="600">Pick the cleanest</text>
+  <text x="1210" y="226" fill="#9fb8cb" font-size="17">the lowest-carbon hour</text>
+  <text x="1210" y="252" fill="#9fb8cb" font-size="17">that is still allowed</text>
+
+  <line x1="418" y1="214" x2="462" y2="214" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="778" y1="214" x2="822" y2="214" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="1138" y1="214" x2="1182" y2="214" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <path d="M800 292 L800 330" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <!-- ============ BAND 2 ============ -->
+  <text x="105" y="382" fill="#60a5fa" font-size="21" font-weight="700">2 &#183; BOOK</text>
+  <text x="235" y="382" fill="#6b8ba5" font-size="19">handed over to AWS</text>
+
+  <rect x="105" y="402" width="1030" height="132" rx="14" fill="#16242f" stroke="#60a5fa" stroke-width="2.5"/>
+  <text x="130" y="446" fill="#eef4f9" font-size="22" font-weight="600">AWS EventBridge Scheduler holds a one-time rule at the chosen minute</text>
+  <text x="130" y="480" fill="#9fb8cb" font-size="17">The job now exists in Amazon's infrastructure, not on your computer.</text>
+  <text x="130" y="506" fill="#9fb8cb" font-size="17">You can see it in the AWS console under EventBridge &#8594; Schedules.</text>
+
+  <rect x="1185" y="402" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="1210" y="446" fill="#eef4f9" font-size="22" font-weight="600">Walk away</text>
+  <text x="1210" y="480" fill="#9fb8cb" font-size="17">your laptop can be</text>
+  <text x="1210" y="506" fill="#9fb8cb" font-size="17">switched off</text>
+
+  <line x1="1138" y1="468" x2="1182" y2="468" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+  <path d="M800 546 L800 584" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <!-- ============ BAND 3 ============ -->
+  <text x="105" y="636" fill="#fbbf24" font-size="21" font-weight="700">3 &#183; RUN &amp; PROVE</text>
+  <text x="315" y="636" fill="#6b8ba5" font-size="19">hours later, by itself</text>
+
+  <rect x="105" y="656" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="130" y="700" fill="#eef4f9" font-size="22" font-weight="600">It runs</text>
+  <text x="130" y="734" fill="#9fb8cb" font-size="17">ECS Fargate starts your</text>
+  <text x="130" y="760" fill="#9fb8cb" font-size="17">container at that hour</text>
+
+  <rect x="465" y="656" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="490" y="700" fill="#eef4f9" font-size="22" font-weight="600">AWS logs it</text>
+  <text x="490" y="734" fill="#9fb8cb" font-size="17">CloudWatch records the</text>
+  <text x="490" y="760" fill="#9fb8cb" font-size="17">start and the checksum</text>
+
+  <rect x="825" y="656" width="310" height="132" rx="14" fill="#16242f" stroke="#2c4152" stroke-width="2"/>
+  <text x="850" y="700" fill="#eef4f9" font-size="22" font-weight="600">Kept as evidence</text>
+  <text x="850" y="734" fill="#9fb8cb" font-size="17">every decision saved</text>
+  <text x="850" y="760" fill="#9fb8cb" font-size="17">the moment it is made</text>
+
+  <rect x="1185" y="656" width="310" height="132" rx="14" fill="#16242f" stroke="#fbbf24" stroke-width="2.5"/>
+  <text x="1210" y="700" fill="#fbbf24" font-size="22" font-weight="600">You can see it</text>
+  <text x="1210" y="734" fill="#9fb8cb" font-size="17">dashboard, history,</text>
+  <text x="1210" y="760" fill="#9fb8cb" font-size="17">and a filable report</text>
+
+  <line x1="418" y1="722" x2="462" y2="722" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="778" y1="722" x2="822" y2="722" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="1138" y1="722" x2="1182" y2="722" stroke="#5d7f9a" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <!-- ============ FOOTNOTES ============ -->
+  <line x1="105" y1="822" x2="1495" y2="822" stroke="#22323f" stroke-width="2"/>
+  <text x="105" y="856" fill="#6b8ba5" font-size="17">
+    <tspan fill="#4ade80" font-weight="600">It refuses to act when acting is wrong.</tspan>
+    <tspan dx="8">If no hour before your deadline is cleaner than right now, the job is not moved.</tspan>
+  </text>
+  <text x="105" y="884" fill="#6b8ba5" font-size="17">
+    <tspan fill="#60a5fa" font-weight="600">Your keys never leave your machine.</tspan>
+    <tspan dx="8">They live in a local .env file that is git-ignored. There is no account, no login, no server of ours.</tspan>
+  </text>
+</svg>
+</body>
+</html>

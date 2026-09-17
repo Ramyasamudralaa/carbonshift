@@ -1,0 +1,16 @@
+# Keep binary assets byte-exact. Without this, core.autocrlf rewrites line
+# endings inside them on checkout and the file is corrupted.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
+
+# Normalise text files.
+*.py    text eol=lf
+*.md    text
+*.html  text
+*.json  text
+*.txt   text

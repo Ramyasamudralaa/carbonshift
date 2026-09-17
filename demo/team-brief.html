@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CarbonShift — Team Brief</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1a2530; --soft:#5a6b7a; --line:#e2e8ee;
+    --green:#0f7a3d; --greenbg:#eaf6ef; --red:#b02a37; --redbg:#fdeeef;
+    --blue:#1d5f9e; --bluebg:#eaf2fa; --amber:#8a5a00; --amberbg:#fdf4e3;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:17px/1.65 "Segoe UI",Helvetica,Arial,sans-serif;
+    padding:44px 16px 80px;
+  }
+  .wrap{max-width:740px;margin:0 auto}
+  h1{font-size:31px;line-height:1.25;margin:0 0 6px}
+  .sub{color:var(--soft);font-size:17px;margin:0 0 34px}
+  h2{
+    font-size:20px;margin:38px 0 12px;padding-top:18px;
+    border-top:2px solid var(--line);
+  }
+  h2:first-of-type{border-top:none;padding-top:0}
+  p{margin:0 0 13px}
+  .lead{
+    background:var(--greenbg);border-left:5px solid var(--green);
+    padding:17px 20px;border-radius:0 8px 8px 0;margin:0 0 30px;
+    font-size:18px;
+  }
+  .lead b{color:var(--green)}
+  .box{border:1px solid var(--line);border-radius:9px;padding:15px 19px;margin:15px 0}
+  .yes{background:var(--greenbg);border-color:#bfe3cd}
+  .no{background:var(--redbg);border-color:#f2ced2}
+  .yes b{color:var(--green)} .no b{color:var(--red)}
+  .yes ul,.no ul{margin:7px 0 0;padding-left:21px}
+  li{margin:4px 0}
+  .step{display:flex;gap:15px;margin:17px 0;align-items:flex-start}
+  .num{
+    flex:0 0 33px;height:33px;border-radius:50%;color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:16px;margin-top:2px;
+  }
+  .n1{background:var(--green)} .n2{background:var(--blue)} .n3{background:var(--amber)}
+  .step h3{margin:0 0 4px;font-size:17px}
+  .step p{margin:0;color:var(--soft);font-size:16px}
+  table{width:100%;border-collapse:collapse;margin:15px 0;font-size:16px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f5f8fa;font-weight:600}
+  td:first-child{font-weight:600}
+  .gloss td:first-child{color:var(--blue);width:34%}
+  .num-big{font-size:19px;font-weight:700;color:var(--green);white-space:nowrap}
+  .tip{
+    background:var(--bluebg);border-left:5px solid var(--blue);
+    padding:15px 19px;border-radius:0 8px 8px 0;margin:17px 0;font-size:16px;
+  }
+  .say{
+    background:var(--amberbg);border:1px dashed #d8b878;border-radius:9px;
+    padding:15px 19px;margin:15px 0;font-size:16px;
+  }
+  .say b{color:var(--amber)}
+  .end{margin-top:44px;padding-top:18px;border-top:2px solid var(--line);
+       color:var(--soft);font-size:15px}
+  @media print{
+    body{padding:0;font-size:10.5pt;line-height:1.5}
+    .wrap{max-width:100%}
+    h1{font-size:22pt}
+    h2{font-size:13pt;margin:22px 0 9px;padding-top:12px;page-break-after:avoid;break-after:avoid}
+    p,li{orphans:3;widows:3}
+    .lead,.box,.step,.tip,.say,tr,h3{page-break-inside:avoid;break-inside:avoid}
+    table{page-break-inside:auto}
+    .end{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>CarbonShift &mdash; what our project actually is</h1>
+<p class="sub">A five-minute read before the demo. Read this with the workflow diagram open next to you.</p>
+
+<div class="lead">
+  <b>In one sentence:</b> we built a tool that makes cloud computer jobs run at the
+  hour of the day when electricity is cleanest &mdash; so they cause less pollution,
+  without changing the job itself at all.
+</div>
+
+<h2>The problem</h2>
+<p>Electricity is <b>not equally clean all day.</b></p>
+<p>When it is windy and sunny, a lot of the country&rsquo;s power comes from wind and
+solar. That electricity is clean. When the wind drops, power companies burn
+coal and gas to fill the gap. That electricity is dirty.</p>
+<p>So the <b>same job, doing exactly the same work, causes different amounts of
+pollution depending on what time it runs.</b></p>
+<p>On the German grid we measured a real day: the dirtiest hour was <b>more than
+twice as dirty</b> as the cleanest hour. Same country, same day, just a
+different hour.</p>
+
+<h2>Why nobody does anything about it</h2>
+<p>A company sets its database backup to run at 8pm. So it runs at 8pm. Every
+single night. It has no idea what the power stations are burning at 8pm, and it
+never asks.</p>
+<p>But here is the thing &mdash; <b>nobody is waiting for that backup.</b> It could run at
+3am. It could run at 9am the next morning. Nobody would notice or care.</p>
+<p>That is a free saving that everybody is walking past.</p>
+
+<h2>What we built</h2>
+<p>CarbonShift. You give it two things:</p>
+<p><b>1.</b> what the job is &nbsp;&nbsp; <b>2.</b> the time by which it must be finished</p>
+<p>It then finds the cleanest hour before that deadline and runs the job at that
+hour instead.</p>
+<p>Same job. Same result. Only the timing changed. In our real test that meant
+<b>about half the CO2.</b></p>
+
+<h2>Which jobs &mdash; this part matters</h2>
+<p>It only works on jobs that <b>nobody is sitting and waiting for.</b></p>
+
+<div class="box yes">
+  <b>YES &mdash; safe to move</b>
+  <ul>
+    <li>Nightly backups</li>
+    <li>Moving and cleaning up data overnight</li>
+    <li>Generating monthly reports</li>
+    <li>Training an AI model</li>
+    <li>Deleting old files, tidying up</li>
+  </ul>
+</div>
+
+<div class="box no">
+  <b>NO &mdash; must never be moved</b>
+  <ul>
+    <li>Someone logging in</li>
+    <li>A payment going through</li>
+    <li>An emergency alert</li>
+    <li>A health check making sure a website is still alive</li>
+  </ul>
+</div>
+
+<p>If a human being is waiting for it, delaying it is simply the wrong thing to
+do &mdash; and <b>our tool refuses to touch those jobs.</b> That refusal is deliberate,
+and it is one of the best things about the project.</p>
+
+<h2>How it works &mdash; the three steps in the diagram</h2>
+
+<div class="step">
+  <div class="num n1">1</div>
+  <div>
+    <h3>DECIDE</h3>
+    <p>It looks up a forecast of how clean the electricity will be for the next
+    24 hours. It throws away every hour that is after your deadline. Out of the
+    hours that are left, it picks the cleanest one.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num n2">2</div>
+  <div>
+    <h3>BOOK</h3>
+    <p>It books the job with Amazon&rsquo;s cloud for that exact minute &mdash; like setting
+    an alarm clock that Amazon holds, not us. From this moment our laptops can
+    be switched off completely. The job will still run.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num n3">3</div>
+  <div>
+    <h3>RUN &amp; PROVE</h3>
+    <p>Hours later, Amazon starts the job by itself and writes a log proving it
+    ran. We keep a record of every decision, so afterwards you can see a
+    dashboard, a history of everything saved, and a printable report.</p>
+  </div>
+</div>
+
+<h2>What makes it good (say these if a judge asks)</h2>
+<table>
+  <tr>
+    <td>It knows when <i>not</i> to act</td>
+    <td>If no hour before the deadline is cleaner than right now, it refuses to
+    move the job. Delaying it would make things worse, so it does not.</td>
+  </tr>
+  <tr>
+    <td>It does not fake the numbers</td>
+    <td>If a job cannot be proven to have run, the report leaves it out of the
+    total and says so. It would rather claim less than claim something it cannot prove.</td>
+  </tr>
+  <tr>
+    <td>It really runs</td>
+    <td>This is not a simulation. Real jobs are booked in real Amazon
+    infrastructure and really run, hours later, on their own.</td>
+  </tr>
+  <tr>
+    <td>It is properly tested</td>
+    <td>162 automated tests, all passing, in under two seconds.</td>
+  </tr>
+  <tr>
+    <td>It is free and open</td>
+    <td>Open source under the MIT licence. Anyone can download it and use it for
+    nothing.</td>
+  </tr>
+</table>
+
+<h2>The five numbers to remember</h2>
+<table>
+  <tr><td class="num-big">49.5%</td><td>CO2 saved in our real test run &mdash; the headline number</td></tr>
+  <tr><td class="num-big">2&times;</td><td>how much dirtier the worst hour of the day is than the best</td></tr>
+  <tr><td class="num-big">251&ndash;512</td><td>the range we measured in one day, in gCO2/kWh (see glossary)</td></tr>
+  <tr><td class="num-big">16 hours</td><td>how long the job was delayed to get that saving</td></tr>
+  <tr><td class="num-big">162</td><td>automated tests, all passing</td></tr>
+</table>
+
+<div class="tip">
+  <b>If you only remember one thing:</b> the dirtiest hour of the day is twice as
+  dirty as the cleanest one. We move jobs that nobody is waiting for into the
+  clean hour. That is the whole idea.
+</div>
+
+<h2>Words you will hear tomorrow</h2>
+<p>Do not panic if a judge uses these. Here is what they mean.</p>
+<table class="gloss">
+  <tr><td>The grid</td><td>The country&rsquo;s electricity supply &mdash; all the power stations together.</td></tr>
+  <tr><td>Carbon intensity</td><td>How dirty the electricity is at this moment. A low number means clean.</td></tr>
+  <tr><td>gCO2/kWh</td><td>The unit for that. Grams of CO2 released per unit of electricity used.</td></tr>
+  <tr><td>A cloud job</td><td>A task that a computer somewhere on the internet runs for you.</td></tr>
+  <tr><td>AWS</td><td>Amazon Web Services. Amazon&rsquo;s cloud. We rent their computers to run the jobs.</td></tr>
+  <tr><td>EventBridge Scheduler</td><td>Amazon&rsquo;s alarm clock. We tell it &ldquo;run this at 9am&rdquo; and it does, on its own.</td></tr>
+  <tr><td>Fargate</td><td>The Amazon service that actually runs our job when the alarm goes off.</td></tr>
+  <tr><td>CloudWatch</td><td>Amazon&rsquo;s logbook. This is our proof that the job really ran.</td></tr>
+  <tr><td>Batch job</td><td>Work done in the background that nobody is waiting for. Exactly what we target.</td></tr>
+  <tr><td>ETL</td><td>A common batch job: moving data from one place to another and tidying it up.</td></tr>
+  <tr><td>Deadline</td><td>The time we promise the job will be finished by. We never go past it.</td></tr>
+  <tr><td>Dry run</td><td>Working out the answer and showing it, without actually booking anything.</td></tr>
+  <tr><td>Open source / MIT</td><td>The code is public and anyone may use it for free, including companies.</td></tr>
+</table>
+
+<h2>If you get asked something you do not know</h2>
+<div class="say">
+  <b>Do not guess.</b> Say this, calmly:<br><br>
+  &ldquo;That is the scheduler logic &mdash; Ramya built that part, she will take it.&rdquo;
+  <br><br>
+  That is honest, it takes two seconds, and it looks like a team that knows who
+  owns what. Guessing wrongly looks far worse than handing it over.
+</div>
+
+<div class="end">
+  <b>Before you walk in:</b> read this once more, look at the workflow diagram,
+  and make sure you can say the one-sentence version in your own words. That is
+  genuinely enough.
+</div>
+
+</div>
+</body>
+</html>

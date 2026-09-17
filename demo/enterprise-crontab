@@ -1,0 +1,35 @@
+# Production batch schedule -- platform-ops, eu-central-1
+# Owner: cloud-platform@example.com
+#
+# Try the scanner against it:
+#   python -m src.scanner --cron demo/enterprise-crontab
+
+MAILTO=cloud-platform-oncall@example.com
+PATH=/usr/local/bin:/usr/bin:/bin
+SHELL=/bin/bash
+
+# --- live path: something is waiting, never delay --------------------------
+* * * * *      /opt/monitoring/heartbeat.py
+*/2 * * * *    /opt/alerts/send_alert_queue.py
+*/5 * * * *    /usr/local/bin/healthcheck.sh --endpoint checkout-api
+*/5 * * * *    /opt/inventory/sync_inventory_realtime.py
+*/10 * * * *   /opt/api/warm_cache.py
+*/15 * * * *   /opt/payments/process_payment_callbacks.py
+
+# --- nightly batch ---------------------------------------------------------
+0 1 * * *      /opt/db/vacuum_analyze_postgres.sh
+15 1 * * *     /usr/bin/logrotate /etc/logrotate.conf
+0 2 * * *      /opt/jobs/backup_database.sh --full
+30 2 * * *     /opt/jobs/backup_transaction_logs.sh
+45 2 * * *     /opt/jobs/archive_old_orders.py --older-than 400d
+0 3 * * *      /opt/etl/etl_warehouse_load.py
+30 3 * * *     /opt/etl/etl_customer_dimension.py
+30 4 * * *     /opt/datalake/sync_data_lake_s3.py
+@daily         /opt/jobs/cleanup_temp_files.sh
+
+# --- heavier periodic work -------------------------------------------------
+0 23 * * *     /opt/ml/retrain_recommendation_model.py --epochs 50
+0 4 * * 0      /opt/search/reindex_search.py
+0 22 * * 6     /opt/analytics/rebuild_analytics_cube.py
+0 6 * * 1      /opt/reports/generate_weekly_sales_report.py --email
+0 5 1 * *      /opt/billing/compute_monthly_invoices.py
